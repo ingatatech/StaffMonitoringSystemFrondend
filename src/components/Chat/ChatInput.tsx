@@ -26,6 +26,127 @@ interface TaskChatContext {
   autoOpen: boolean
 }
 
+const VALIDATION_CONFIG = {
+  maxFileSize: 10 * 1024 * 1024, 
+  maxFiles: 5, 
+  allowedExtensions: {
+    images: [
+      ".jpg", ".jpeg", ".png", ".gif", ".tif", ".webp",
+      ".bmp", ".svg", ".ico", ".heic", ".tiff", ".psd",
+      ".ai", ".eps", ".raw", ".avif", ".jp2"
+    ],
+    audio: [
+      ".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma",
+      ".m4a", ".opus", ".aiff", ".alac", ".amr", ".mid",
+      ".midi", ".mp2", ".mpa", ".ra", ".weba"
+    ],
+    video: [
+      ".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv",
+      ".wmv", ".m4v", ".3gp", ".mpg", ".mpeg", ".m2v",
+      ".m4p", ".m4v", ".mp2", ".mpe", ".mpv", ".mxf",
+      ".nsv", ".ogv", ".qt", ".rm", ".rmvb", ".svi",
+      ".vob", ".yuv"
+    ],
+    documents: [
+      ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt",
+      ".pptx", ".txt", ".rtf", ".csv", ".zip", ".rar",
+      ".7z", ".gz", ".tar", ".bz2", ".dmg", ".iso",
+      ".epub", ".mobi", ".pages", ".numbers", ".key",
+      ".odt", ".ods", ".odp", ".md", ".json", ".xml",
+      ".html", ".htm", ".log", ".sql", ".db", ".dat",
+      ".apk", ".exe", ".dll", ".msi"
+    ],
+    fonts: [
+      ".ttf", ".otf", ".woff", ".woff2", ".eot", ".sfnt"
+    ],
+    archives: [
+      ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2",
+      ".xz", ".iso", ".dmg", ".pkg", ".deb", ".rpm"
+    ],
+    executables: [
+      ".exe", ".msi", ".dmg", ".pkg", ".deb", ".rpm",
+      ".apk", ".app", ".bat", ".cmd", ".sh", ".bin"
+    ],
+    code: [
+      ".js", ".ts", ".jsx", ".tsx", ".py", ".java",
+      ".c", ".cpp", ".h", ".cs", ".php", ".rb",
+      ".go", ".swift", ".kt", ".scala", ".sh", ".pl",
+      ".lua", ".sql", ".json", ".xml", ".yml", ".yaml",
+      ".ini", ".cfg", ".conf", ".env"
+    ]
+  }
+}
+
+const ALL_ALLOWED_EXTENSIONS = [
+  ...VALIDATION_CONFIG.allowedExtensions.images,
+  ...VALIDATION_CONFIG.allowedExtensions.audio,
+  ...VALIDATION_CONFIG.allowedExtensions.video,
+  ...VALIDATION_CONFIG.allowedExtensions.documents,
+  ...VALIDATION_CONFIG.allowedExtensions.fonts,
+  ...VALIDATION_CONFIG.allowedExtensions.archives,
+  ...VALIDATION_CONFIG.allowedExtensions.executables,
+  ...VALIDATION_CONFIG.allowedExtensions.code
+]
+
+const validateFileSize = (file: File): { isValid: boolean; error?: string } => {
+  if (file.size > VALIDATION_CONFIG.maxFileSize) {
+    const maxSizeMB = VALIDATION_CONFIG.maxFileSize / (1024 * 1024)
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2)
+    return {
+      isValid: false,
+      error: `File "${file.name}" is too large (${fileSizeMB}MB). Maximum allowed size is ${maxSizeMB}MB.`
+    }
+  }
+  return { isValid: true }
+}
+
+const validateFileExtension = (file: File): { isValid: boolean; error?: string; category?: string } => {
+  const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+
+  if (!ext || ext === '.') {
+    return { isValid: false, error: `File "${file.name}" has no extension` }
+  }
+
+  if (!ALL_ALLOWED_EXTENSIONS.includes(ext)) {
+    const allowedTypes = Object.keys(VALIDATION_CONFIG.allowedExtensions).join(', ')
+    return {
+      isValid: false,
+      error: `File type "${ext}" is not allowed. Allowed types: ${allowedTypes}`
+    }
+  }
+
+  // Determine file category
+  let category = 'documents'
+  if (VALIDATION_CONFIG.allowedExtensions.images.includes(ext)) category = 'images'
+  else if (VALIDATION_CONFIG.allowedExtensions.audio.includes(ext)) category = 'audio'
+  else if (VALIDATION_CONFIG.allowedExtensions.video.includes(ext)) category = 'video'
+  else if (VALIDATION_CONFIG.allowedExtensions.fonts.includes(ext)) category = 'fonts'
+  else if (VALIDATION_CONFIG.allowedExtensions.archives.includes(ext)) category = 'archives'
+  else if (VALIDATION_CONFIG.allowedExtensions.executables.includes(ext)) category = 'executables'
+  else if (VALIDATION_CONFIG.allowedExtensions.code.includes(ext)) category = 'code'
+
+  return { isValid: true, category }
+}
+
+const validateFileCount = (currentFiles: File[], newFiles: File[]): { isValid: boolean; error?: string } => {
+  const totalFiles = currentFiles.length + newFiles.length
+  if (totalFiles > VALIDATION_CONFIG.maxFiles) {
+    return {
+      isValid: false,
+      error: `Cannot upload more than ${VALIDATION_CONFIG.maxFiles} files at once. You're trying to upload ${totalFiles} files.`
+    }
+  }
+  return { isValid: true }
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
 const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskContext, onClearTaskContext }) => {
   const dispatch = useAppDispatch()
   const [message, setMessage] = useState("")
@@ -33,7 +154,8 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
   const [isUploading, setIsUploading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
-  
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+
   const { sendingMessage, replyingTo } = useAppSelector((state) => state.chat)
   const currentUser = useAppSelector((state) => state.login.user)
   const users = useAppSelector((state) => state.chat.users) || []
@@ -80,14 +202,12 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
           try {
             currentTaskContext = JSON.parse(taskChatContextStr)
           } catch (error) {
-            console.error("Error parsing task chat context:", error)
-          }
+                     }
         }
       }
 
-      // Send message to existing conversation (conversation should already exist from auto-creation)
+      // Send message to existing conversation
       if (conversationId) {
-        // Use receiverId from props, or fallback to task context
         const targetReceiverId = receiverId || currentTaskContext?.userId
 
         if (!targetReceiverId) {
@@ -95,7 +215,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
           return
         }
 
-        console.log("Sending message payload:")
+
 
         await sendMessage(
           conversationId,
@@ -124,7 +244,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
         showErrorToast("No conversation available. Please wait for conversation to be created.")
       }
     } catch (error) {
-      console.error("Error sending message:", error)
+    
       showErrorToast("Failed to send message. Please try again.")
     }
   }
@@ -155,25 +275,109 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
     const files = e.target.files
     if (!files || files.length === 0) return
 
-    setIsUploading(true)
-    try {
-      const newAttachments: any[] = []
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        const result = await dispatch(uploadAttachment(file)).unwrap()
-        newAttachments.push(result)
+    // Convert FileList to Array
+    const fileArray = Array.from(files)
+
+    // 1. Validate file count first
+    const countValidation = validateFileCount(attachments, fileArray)
+    if (!countValidation.isValid) {
+      showErrorToast(countValidation.error!)
+      return
+    }
+
+    const validFiles: File[] = []
+    const invalidFiles: string[] = []
+
+    // 2. Validate each file
+    for (const file of fileArray) {
+      // Size validation - strict 10MB check
+      const sizeValidation = validateFileSize(file)
+      if (!sizeValidation.isValid) {
+        invalidFiles.push(sizeValidation.error!)
+        continue
       }
-      setAttachments((prev) => [...prev, ...newAttachments])
-    } catch (error) {
-      console.error("Error uploading file:", error)
-      showErrorToast("Failed to upload file")
-    } finally {
-      setIsUploading(false)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+
+      // Extension validation
+      const extValidation = validateFileExtension(file)
+      if (!extValidation.isValid) {
+        invalidFiles.push(extValidation.error!)
+        continue
+      }
+
+      validFiles.push(file)
+    }
+
+    // Show all validation errors at once
+    if (invalidFiles.length > 0) {
+      // Show first 3 errors to avoid overwhelming the user
+      invalidFiles.slice(0, 3).forEach(error => showErrorToast(error))
+
+      // If there were more errors, show a summary
+      if (invalidFiles.length > 3) {
+        showErrorToast(`And ${invalidFiles.length - 3} more files couldn't be uploaded`)
+      }
+
+      // If no valid files, return early
+      if (validFiles.length === 0) {
+        if (fileInputRef.current) fileInputRef.current.value = ""
+        return
       }
     }
+
+    // Proceed with upload for valid files
+    setIsUploading(true)
+    setUploadProgress({})
+
+    try {
+      const newAttachments: any[] = []
+
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i]
+
+        try {
+          // Update progress
+          setUploadProgress(prev => ({
+            ...prev,
+            [file.name]: 0
+          }))
+
+          const result = await dispatch(uploadAttachment(file)).unwrap()
+
+          // Update progress to complete
+          setUploadProgress(prev => ({
+            ...prev,
+            [file.name]: 100
+          }))
+
+          newAttachments.push(result)
+
+        } catch (fileError: any) {
+          // Remove from progress
+          setUploadProgress(prev => {
+            const newProgress = { ...prev }
+            delete newProgress[file.name]
+            return newProgress
+          })
+
+          showErrorToast(`Failed to upload ${file.name}: ${fileError?.message || 'Unknown error'}`)
+        }
+      }
+
+      if (newAttachments.length > 0) {
+        setAttachments((prev) => [...prev, ...newAttachments])
+        showSuccessToast(`Uploaded ${newAttachments.length} file(s) successfully`)
+      }
+
+    } catch (error) {
+      
+      showErrorToast("Upload process failed. Please try again.")
+    } finally {
+      setIsUploading(false)
+      setUploadProgress({})
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
   }
+
 
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
@@ -307,9 +511,6 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
         <div className="mb-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-md flex items-center justify-between">
           <div className="flex items-center">
             <Reply size={14} className="mr-1.5 text-blue-600 dark:text-blue-400" />
-            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-              Replying to {replyingTo.sender.id === currentUser?.id ? "yourself" : replyingTo.sender.name}
-            </span>
             <span className="ml-2 text-xs text-blue-500 dark:text-blue-400 truncate max-w-xs">
               {replyingTo.content}
             </span>
@@ -351,6 +552,29 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
         </div>
       )}
 
+      {/* Upload Progress Indicator */}
+      {Object.keys(uploadProgress).length > 0 && (
+        <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+          <div className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+            Uploading files...
+          </div>
+          {Object.entries(uploadProgress).map(([fileName, progress]) => (
+            <div key={fileName} className="mb-1">
+              <div className="flex justify-between text-xs text-blue-600 dark:text-blue-400 mb-1">
+                <span className="truncate max-w-xs">{fileName}</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-1.5">
+                <div
+                  className="bg-blue-600 dark:bg-blue-400 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Attachments preview */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
@@ -368,6 +592,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
             onClick={() => fileInputRef.current?.click()}
             disabled={isDisabled}
             aria-label="Attach file"
+            title={`Upload files (Max: ${VALIDATION_CONFIG.maxFiles} files, ${VALIDATION_CONFIG.maxFileSize / (1024 * 1024)}MB each)`}
           >
             <Paperclip size={20} />
             <input
@@ -377,6 +602,8 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
               onChange={handleFileUpload}
               multiple
               disabled={isDisabled}
+              accept={ALL_ALLOWED_EXTENSIONS.join(',')}
+              title={`Max ${VALIDATION_CONFIG.maxFiles} files, ${VALIDATION_CONFIG.maxFileSize / (1024 * 1024)}MB each`}
             />
           </button>
           <button
@@ -386,16 +613,6 @@ const ChatInput: React.FC<ChatInputProps> = ({ conversationId, receiverId, taskC
             aria-label="Add emoji"
           >
             <Smile size={20} />
-          </button>
-          <button
-            className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            onMouseLeave={isRecording ? stopRecording : undefined}
-            disabled={isDisabled}
-            aria-label="Record audio"
-          >
-            <Mic size={20} className={isRecording ? "text-red-500 animate-pulse" : ""} />
           </button>
         </div>
 

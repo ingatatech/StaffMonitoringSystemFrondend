@@ -20,7 +20,7 @@ const initialState: UserManagementState = {
 
 export const fetchUsers = createAsyncThunk("userManagement/fetchUsers", async () => {
   const token = localStorage.getItem("token") // Get token from local storage
-  const response = await axios.get<{ data: User[] }>(`${import.meta.env.VITE_BASE_URL}/user/users`, {
+  const response = await axios.get<{ data: User[] }>(`${import.meta.env.VITE_BASE_URL}/user/users?getAll=true`, {
     headers: {
       Authorization: `Bearer ${token}`, // Include token in headers
     },

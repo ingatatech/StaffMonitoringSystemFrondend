@@ -1,5 +1,5 @@
-// @ts-nocheck
 
+// @ts-nocheck
 import React from "react"
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -7,8 +7,6 @@ import {
   FaCheckCircle,
   FaClock,
   FaExclamationCircle,
-  FaEye,
-  FaEyeSlash,
   FaChevronDown,
   FaChevronUp,
   FaCheck,
@@ -24,7 +22,12 @@ import {
   FaComments,
   FaUser,
   FaTimes,
+  FaExchangeAlt,
+  FaHistory,
+  FaRedo,
+  FaBan,
 } from "react-icons/fa"
+import { MessageSquare } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../ui/table"
 import { Button } from "../../../ui/button"
 import { Badge } from "../../../ui/Badge"
@@ -33,7 +36,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../ui/Card"
 import { Input } from "../../../ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../ui/select"
 import ViewTaskModal from "./ViewTaskModal"
-
+import { toggleChat } from "../../../Chat/chatSlice"
+import { useAppDispatch, useAppSelector } from "../../../../Redux/hooks"
 interface Comment {
   text: string
   user_id: number
@@ -47,22 +51,28 @@ interface Task {
   description: string
   status: string
   due_date: string
-  company_served?: {
-    id: number
-    name?: string
-    tin?: string
-  }
+
   contribution: string
   reviewed: boolean
   review_status: string
   related_project: string
   achieved_deliverables: string
   comments?: Comment[]
+  // Added shifting status fields
+  workDaysCount?: number
+  originalDueDate?: string
+  lastShiftedDate?: string
+  isShifted?: boolean
+  canEdit?: boolean
 }
 
 interface DailyTask {
   id: number
   submission_date: string
+  user: {
+    id: number
+    username: string
+  }
   tasks: Task[]
   submitted: boolean
 }
@@ -238,7 +248,33 @@ const getStatusColor = (status: string) => {
   }
 }
 
+const getReviewStatusProps = (status: string) => {
+  switch (status) {
+    case "approved":
+      return {
+        color: "bg-green/10 text-green border-green",
+        label: "Approved",
+        icon: <FaCheck className="text-green mr-1" />,
+      }
+    case "rejected":
+      return {
+        color: "bg-red/10 text-red border-red",
+        label: "Rejected",
+        icon: <FaExclamationCircle className="text-red mr-1" />,
+      }
+    case "pending":
+    default:
+      return {
+        color: "bg-yellow-100 text-yellow-700 border-yellow-400",
+        label: "Pending",
+        icon: <FaClock className="text-yellow-700 mr-1" />,
+      }
+  }
+}
+
 const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, onSubmit }) => {
+  const dispatch = useAppDispatch()
+  const conversations = useAppSelector((state) => state.chat.conversations)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
@@ -246,13 +282,13 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
-
-  // Comments functionality
   const [selectedTaskComments, setSelectedTaskComments] = useState<{
     comments: Comment[]
     taskTitle: string
   } | null>(null)
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
+  const [reworkTask, setReworkTask] = useState<Task | null>(null)
+  const [isReworkModalOpen, setIsReworkModalOpen] = useState(false)
 
   const tasksPerPage = 5
 
@@ -269,13 +305,69 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
   const isPast = isNaN(submissionDate.getTime()) ? false : submissionDate < new Date(today)
   const isFuture = isNaN(submissionDate.getTime()) ? false : submissionDate > new Date(today)
 
+  // Check if any tasks are in progress
+  const hasInProgressTasks = dailyTask.tasks.some(task => task.status === "in_progress")
+  // Check if we have at least one completed task
+  const hasCompletedTask = dailyTask.tasks.some(task => task.status === "completed")
+  // Check if any tasks are rejected
+  const hasRejectedTasks = dailyTask.tasks.some(task => task.review_status === "rejected")
+  // Count rejected tasks
+  const rejectedTasksCount = useMemo(() => {
+    return dailyTask.tasks.filter((task) => task.review_status === "rejected").length
+  }, [dailyTask.tasks])
+
+  const handleOpenTaskChat = (task: Task, userId: number, userName: string) => {
+    // Store task context in localStorage with autoOpen flag
+    localStorage.setItem(
+      "taskChatContext",
+      JSON.stringify({
+        taskId: task.id,
+        taskTitle: task.title,
+        taskDescription: task.description,
+        userId: userId,
+        userName: userName,
+        autoOpen: true,
+      })
+    )
+
+    // Find any existing conversation with this user
+    const existingConversations = conversations.filter((conv) => conv.otherUser.id === userId)
+
+    // Open the chat modal
+    dispatch(toggleChat())
+  }
+
+  // Comments functionality
+  const handleOpenComments = (task: Task) => {
+    setSelectedTaskComments({
+      comments: task.comments || [],
+      taskTitle: task.title,
+    })
+    setIsCommentsModalOpen(true)
+  }
+
+  const handleCloseComments = () => {
+    setIsCommentsModalOpen(false)
+    setSelectedTaskComments(null)
+  }
+
+  // Rework functionality
+  const handleOpenRework = (task: Task) => {
+    setReworkTask(task)
+    setIsReworkModalOpen(true)
+  }
+
+  const handleCloseRework = () => {
+    setIsReworkModalOpen(false)
+    setReworkTask(null)
+  }
+
   // Filter and paginate tasks
   const filteredTasks = useMemo(() => {
     return dailyTask.tasks.filter((task) => {
       const matchesSearch =
         task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (task.company_served?.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
         task.related_project.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesStatus = statusFilter ? task.status === statusFilter : true
@@ -299,18 +391,20 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
     }
   }
 
-  const getButtonText = () => {
-    if (dailyTask.submitted) return "Submitted"
-    if (isPast) return "Cannot Submit Past Tasks"
-    if (isFuture) return "Cannot Submit Future Tasks"
-    return "Submit Daily Tasks"
-  }
-
   const getButtonColor = () => {
     if (dailyTask.submitted) return "bg-green text-white cursor-not-allowed"
     if (isPast) return "bg-[#FF8C00] text-white cursor-not-allowed"
     if (isFuture) return "bg-yellow text-white cursor-not-allowed"
+    if (!hasCompletedTask) return "bg-orange-500 text-white cursor-not-allowed"
     return "bg-green text-white hover:bg-green-600"
+  }
+
+  const getButtonText = () => {
+    if (dailyTask.submitted) return "Submitted"
+    if (isPast) return "Cannot Submit Past Tasks"
+    if (isFuture) return "Cannot Submit Future Tasks"
+    if (!hasCompletedTask) return "Complete At Least One Task To Submit"
+    return "Submit Daily Tasks"
   }
 
   // Task detail handlers
@@ -319,18 +413,9 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
     setIsDetailOpen(true)
   }
 
-  // Comments functionality
-  const handleOpenComments = (task: Task) => {
-    setSelectedTaskComments({
-      comments: task.comments || [],
-      taskTitle: task.title,
-    })
-    setIsCommentsModalOpen(true)
-  }
-
-  const handleCloseComments = () => {
-    setIsCommentsModalOpen(false)
-    setSelectedTaskComments(null)
+  const closeTaskDetail = () => {
+    setIsDetailOpen(false)
+    setSelectedTask(null)
   }
 
   // Status counts for summary
@@ -342,6 +427,11 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
       },
       {} as Record<string, number>,
     )
+  }, [dailyTask.tasks])
+
+  // Count shifted tasks
+  const shiftedTasksCount = useMemo(() => {
+    return dailyTask.tasks.filter((task) => task.isShifted).length
   }, [dailyTask.tasks])
 
   return (
@@ -361,11 +451,11 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                 {isNaN(submissionDate.getTime())
                   ? "Invalid Date"
                   : submissionDate.toLocaleDateString("en-US", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
               </CardTitle>
               <div className="flex flex-wrap gap-2 mt-2">
                 <Badge variant="outline" className="bg-blue/10 text-blue border-blue">
@@ -384,6 +474,18 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                 {statusCounts.delayed && (
                   <Badge variant="outline" className="bg-red/10 text-red border-red">
                     <FaExclamationCircle className="mr-1" /> {statusCounts.delayed} Delayed
+                  </Badge>
+                )}
+                {/* Show shifted tasks count */}
+                {shiftedTasksCount > 0 && (
+                  <Badge variant="outline" className="bg-orange/10 text-orange border-orange">
+                    <FaExchangeAlt className="mr-1" /> {shiftedTasksCount} Shifted
+                  </Badge>
+                )}
+                {/* Show rejected tasks count */}
+                {rejectedTasksCount > 0 && (
+                  <Badge variant="outline" className="bg-red/10 text-red border-red">
+                    <FaBan className="mr-1" /> {rejectedTasksCount} Rejected
                   </Badge>
                 )}
                 {dailyTask.submitted && (
@@ -458,11 +560,12 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                       <TableRow>
                         <TableHead className="w-[50px]">#</TableHead>
                         <TableHead>Task Details</TableHead>
-                        <TableHead>Company</TableHead>
+
                         <TableHead>Project</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Review</TableHead>
-                        <TableHead className="w-[120px]">Actions</TableHead>
+                        <TableHead>Work Days</TableHead>
+                        <TableHead className="w-[220px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -474,26 +577,46 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                             </TableCell>
                             <TableCell>
                               <div className="space-y-1">
-                                <p className="font-semibold">{task.title}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold">{task.title}</p>
+                                  {/* Show shift indicator */}
+                                  {task.isShifted && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge variant="outline" className="bg-orange/10 text-orange border-orange">
+                                            <FaExchangeAlt className="mr-1 h-3 w-3" />
+                                            Shifted
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>This task was shifted from a previous day</p>
+                                          {task.originalDueDate && (
+                                            <p>Original date: {new Date(task.originalDueDate).toLocaleDateString()}</p>
+                                          )}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  {/* Show rejected indicator */}
+                                  {task.review_status === "rejected" && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Badge variant="outline" className="bg-red/10 text-red border-red">
+                                            <FaBan className="mr-1 h-3 w-3" />
+                                            Rejected
+                                          </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>This task has been rejected and needs rework</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
                                 <TruncatedContent content={task.description} maxLength={50} />
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="flex items-center">
-                                      <FaBuilding className="mr-2 text-gray-500" />
-                                      <span className="truncate max-w-[120px]">
-                                        {task.company_served?.name || "N/A"}
-                                      </span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{task.company_served?.name || "N/A"}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
                             </TableCell>
                             <TableCell>
                               <TooltipProvider>
@@ -519,16 +642,36 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center">
-                                {task.reviewed ? (
-                                  <FaEye className="text-green mr-1" />
-                                ) : (
-                                  <FaEyeSlash className="text-red mr-1" />
-                                )}
-                                <span className="text-sm font-medium">
-                                  {task.reviewed ? "Reviewed" : "Not Reviewed"}
-                                </span>
-                              </div>
+                              {(() => {
+                                const { color, label, icon } = getReviewStatusProps(task.review_status)
+                                return (
+                                  <span
+                                    className={`inline-flex items-center font-medium rounded px-2 py-1 border ${color}`}
+                                  >
+                                    {icon}
+                                    <span className="text-sm">{label}</span>
+                                  </span>
+                                )
+                              })()}
+                            </TableCell>
+                            {/* Work Days column */}
+                            <TableCell>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="bg-purple/10 text-purple border-purple">
+                                      <FaHistory className="mr-1 h-3 w-3" />
+                                      {task.workDaysCount || 0} day{(task.workDaysCount || 0) !== 1 ? "s" : ""}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Days worked on this task</p>
+                                    {task.originalDueDate && task.originalDueDate !== task.due_date && (
+                                      <p>Original date: {new Date(task.originalDueDate).toLocaleDateString()}</p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -539,18 +682,67 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                                 >
                                   View
                                 </Button>
+
+                                {/* Show Rework Button for in_progress, rejected, or shifted tasks */}
+                                {(task.status === "in_progress" || task.review_status === "rejected" || task.isShifted) && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleOpenRework(task)
+                                          }}
+                                          size="sm"
+                                          className="bg-orange-500 text-white hover:bg-orange-600 p-2"
+                                          aria-label="Rework task"
+                                        >
+                                          <FaRedo className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>
+                                          {task.status === "in_progress"
+                                            ? "Mark task for rework"
+                                            : task.review_status === "rejected"
+                                              ? "Rework this rejected task"
+                                              : "Rework this shifted task"}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        onClick={() => handleOpenTaskChat(task, dailyTask.user.id, dailyTask.user.username)}
+                                        size="sm"
+                                        className="bg-green text-white hover:bg-green-600 p-2"
+                                        aria-label="Chat about task"
+                                      >
+                                        <MessageSquare className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Chat about this task</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Button
                                         onClick={() => handleOpenComments(task)}
                                         size="sm"
-                                        variant="outline"
-                                        className="relative border-gray-300 hover:border-blue hover:text-blue"
+                                        className="bg-purple-500 text-white hover:bg-purple-600 p-2 relative"
+                                        aria-label="View task comments"
                                       >
                                         <FaComments className="h-4 w-4" />
                                         {task.comments && task.comments.length > 0 && (
-                                          <span className="absolute -top-2 -right-2 bg-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                                          <span className="absolute -top-1 -right-1 bg-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
                                             {task.comments.length}
                                           </span>
                                         )}
@@ -559,8 +751,9 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                                     <TooltipContent>
                                       <p>
                                         {task.comments && task.comments.length > 0
-                                          ? `${task.comments.length} comment${task.comments.length !== 1 ? 's' : ''}`
-                                          : 'No comments'}
+                                          ? `View ${task.comments.length} comment${task.comments.length !== 1 ? "s" : ""
+                                          }`
+                                          : "No comments"}
                                       </p>
                                     </TooltipContent>
                                   </Tooltip>
@@ -571,9 +764,9 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                         ))
                       ) : (
                         <TableRow>
-                          <td colSpan={7} className="text-center py-4 text-gray-500">
+                          <TableCell colSpan={8} className="text-center py-4 text-gray-500">
                             No tasks found matching your criteria
-                          </td>
+                          </TableCell>
                         </TableRow>
                       )}
                     </TableBody>
@@ -641,7 +834,7 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
                 <div className="mt-6 flex justify-end">
                   <Button
                     onClick={handleSubmit}
-                    disabled={!isToday || dailyTask.submitted || isPast || isFuture || isSubmitting}
+                    disabled={!isToday || dailyTask.submitted || isPast || isFuture || isSubmitting || !hasCompletedTask}
                     className={`${getButtonColor()} transition-colors duration-300`}
                   >
                     {isSubmitting ? (
@@ -666,7 +859,7 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
       </Card>
 
       {/* Task Detail Modal */}
-      <ViewTaskModal task={selectedTask} isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} />
+      <ViewTaskModal task={selectedTask} isOpen={isDetailOpen} onClose={closeTaskDetail} />
 
       {/* Comments Modal */}
       <CommentsModal
@@ -675,6 +868,8 @@ const SupervisorDailyTasks: React.FC<SupervisorDailyTasksProps> = ({ dailyTask, 
         comments={selectedTaskComments?.comments || []}
         taskTitle={selectedTaskComments?.taskTitle || ""}
       />
+
+      {/* Rework Modal */}
     </motion.div>
   )
 }

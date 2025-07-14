@@ -235,12 +235,10 @@ export const fetchDailyTasks = createAsyncThunk(
   "tasks/fetchDailyTasks",
   async (userId: number, { rejectWithValue, getState }) => {
     try {
-      console.log("📋 [FRONTEND] Fetching daily tasks for user:", userId)
       const state = getState() as RootState
       const organizationId = state.login.user?.organization?.id
       const token = localStorage.getItem("token")
 
-      console.log("🏢 [FRONTEND] Organization ID:", organizationId)
 
       // Auto-shifting happens automatically in the backend when fetching daily tasks
       const response = await axios.get(`${apiUrl}/user/${userId}/daily-tasks`, {
@@ -249,7 +247,6 @@ export const fetchDailyTasks = createAsyncThunk(
         },
       })
 
-      console.log("✅ [FRONTEND] Daily tasks fetched successfully")
       
       // Filter out empty task groups while ensuring we return an array
       const rawData = response.data.data || []
@@ -258,11 +255,9 @@ export const fetchDailyTasks = createAsyncThunk(
         return dailyTask.tasks && dailyTask.tasks.length > 0
       })
       
-      console.log(`🔍 [FRONTEND] Filtered ${rawData.length - filteredData.length} empty task groups`)
       
       return filteredData
     } catch (error: any) {
-      console.error("❌ [FRONTEND] Failed to fetch daily tasks:", error)
       const errorMessage = error.response?.data?.message || "Failed to fetch daily tasks"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
@@ -273,7 +268,6 @@ export const submitDailyTasks = createAsyncThunk(
   "tasks/submitDailyTasks",
   async ({ userId, dailyTaskId }: { userId: number; dailyTaskId: number }, { rejectWithValue }) => {
     try {
-      console.log("📤 [FRONTEND] Submitting daily tasks:", { userId, dailyTaskId })
       const token = localStorage.getItem("token")
 
       const response = await axios.post(
@@ -286,11 +280,9 @@ export const submitDailyTasks = createAsyncThunk(
         },
       )
 
-      console.log("✅ [FRONTEND] Daily tasks submitted successfully")
       showSuccessToast("Daily tasks submitted successfully!")
       return response.data.data || response.data
     } catch (error: any) {
-      console.error("❌ [FRONTEND] Failed to submit daily tasks:", error)
       const errorMessage = error.response?.data?.message || "Failed to submit daily tasks"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)

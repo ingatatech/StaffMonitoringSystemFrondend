@@ -3,6 +3,7 @@
 import { motion } from "framer-motion"
 import { FaRocket, FaArrowRight } from "react-icons/fa"
 import * as React from "react"
+import { Link } from "react-router-dom"
 
 const CTASection: React.FC = () => {
   const getContent = (idx: number) => {
@@ -62,7 +63,11 @@ const CTASection: React.FC = () => {
                     className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-8 py-4 rounded-2xl hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-2xl font-semibold group"
                   >
                     <FaRocket className="text-lg group-hover:animate-bounce" />
-                    <span>Get Started Now</span>
+                    <span>
+                   <a href="/login" className=""> Get Started Now</a>
+
+                    </span>
+                 
                     <FaArrowRight className="ml-1 group-hover:translate-x-1 transition-transform duration-300" />
                   </motion.button>
                   <motion.button

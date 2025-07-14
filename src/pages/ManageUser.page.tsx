@@ -1,4 +1,5 @@
 // @ts-nocheck
+
 "use client";
 import React from "react";
 import { useEffect, useState, useCallback } from "react";
@@ -38,7 +39,15 @@ import {
   X,
   Save,
   Loader2,
-  
+  FileText,
+  Building2,
+  BarChart2,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  CheckCircle,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -77,15 +86,84 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/Card";
+import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import Loader from "../components/ui/Loader";
 import { toast } from "react-toastify";
+
+// Enhanced Summary Card Component similar to TaskSummaryCard
+interface UserSummaryCardProps {
+  title: string;
+  value: number | string;
+  subtitle: string;
+  icon: React.ReactNode;
+  bgGradient: string;
+  textColor: string;
+  loading?: boolean;
+}
+
+const UserSummaryCard: React.FC<UserSummaryCardProps> = ({
+  title,
+  value,
+  subtitle,
+  icon,
+  bgGradient,
+  textColor,
+  loading = false
+}) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      whileHover={{ scale: 1.02, y: -2 }}
+    >
+      <Card className={`${bgGradient} border-0 shadow-lg hover:shadow-xl transition-all duration-300 h-16`}>
+        <div className="h-full flex items-center relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute inset-0 bg-white/10 opacity-20"></div>
+          <div className="absolute -top-1 -right-1 w-6 h-6 bg-white/10 rounded-full"></div>
+
+          <div className="flex items-center justify-between w-full h-full relative z-10 px-3">
+            {/* Icon Section - Reduced size */}
+            <div className="bg-white/20 p-1.5 rounded-md backdrop-blur-sm flex-shrink-0">
+              <motion.div
+                className={`${textColor} text-base`}
+                whileHover={{ rotate: 360 }}
+                transition={{ duration: 0.6 }}
+              >
+                {React.cloneElement(icon, { className: "h-4 w-4" })}
+              </motion.div>
+            </div>
+
+            {/* Text Content Section - Reduced text sizes */}
+            <div className="flex-1 flex flex-col justify-center ml-2">
+              <p className={`${textColor} text-[0.65rem] font-medium opacity-90 mb-0.5 leading-none`}>{title}</p>
+              <p className={`${textColor} text-base font-bold leading-tight`}>
+                {loading ? (
+                  <motion.div
+                    className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                  />
+                ) : (
+                  value
+                )}
+              </p>
+              {subtitle && <p className={`${textColor} text-[0.6rem] opacity-75 -mt-0.5 leading-none`}>{subtitle}</p>}
+            </div>
+
+            {/* Eye Icon Section - Reduced size */}
+            <div className={`${textColor} opacity-60 self-center`}>
+              <Eye className="text-xs" />
+            </div>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+};
+
 
 const ManageUser: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -111,8 +189,8 @@ const ManageUser: React.FC = () => {
   const [userToDelete, setUserToDelete] = useState<number | null>(null);
   const [newRole, setNewRole] = useState<string>("");
 
-const [userToDeactivate, setUserToDeactivate] = useState<number | null>(null);
-const [deactivateMessage, setDeactivateMessage] = useState<string>("");
+  const [userToDeactivate, setUserToDeactivate] = useState<number | null>(null);
+  const [deactivateMessage, setDeactivateMessage] = useState<string>("");
 
   // Update user modal states
   const [isUpdateModalVisible, setIsUpdateModalVisible] = useState(false);
@@ -126,6 +204,7 @@ const [deactivateMessage, setDeactivateMessage] = useState<string>("");
     company_id: "none",
     department_id: "none",
     position_id: "none",
+    directSupervisorPositionId: "none",
   });
 
   const { user: loggedInUser } = useSelector((state: RootState) => state.login);
@@ -137,7 +216,6 @@ const [deactivateMessage, setDeactivateMessage] = useState<string>("");
   useEffect(() => {
     if (loggedInUser?.organization?.id) {
       dispatch(fetchUsers(loggedInUser.organization.id));
-      // Fetch data needed for update form
       dispatch(fetchHoldingCompanies());
       dispatch(fetchSupervisoryLevels());
       dispatch(fetchPositions());
@@ -147,7 +225,6 @@ const [deactivateMessage, setDeactivateMessage] = useState<string>("");
     }
   }, [dispatch, loggedInUser, hasSubsidiaries]);
 
-  // Handle update success
   useEffect(() => {
     if (updateSuccess) {
       toast.success("User updated successfully!");
@@ -155,14 +232,12 @@ const [deactivateMessage, setDeactivateMessage] = useState<string>("");
       setUserToUpdate(null);
       resetUpdateForm();
       dispatch(clearAuthSuccess());
-      // Refresh users list
       if (loggedInUser?.organization?.id) {
         dispatch(fetchUsers(loggedInUser.organization.id));
       }
     }
   }, [updateSuccess, dispatch, loggedInUser]);
 
-  // Handle update error
   useEffect(() => {
     if (updateError) {
       toast.error(updateError);
@@ -178,26 +253,26 @@ const [deactivateMessage, setDeactivateMessage] = useState<string>("");
     []
   );
 
-const handleDeactivateUser = async () => {
-  if (userToDeactivate) {
-    try {
-      const resultAction = await dispatch(deactivateUser(userToDeactivate));
-      if (deactivateUser.fulfilled.match(resultAction)) {
-        setDeactivateMessage(resultAction.payload.message || "User deactivated successfully");
-        // Refetch users after deactivation/activation
-        if (loggedInUser?.organization?.id) {
-          await dispatch(fetchUsers(loggedInUser.organization.id));
+  const handleDeactivateUser = async () => {
+    if (userToDeactivate) {
+      try {
+        const resultAction = await dispatch(deactivateUser(userToDeactivate));
+        if (deactivateUser.fulfilled.match(resultAction)) {
+          setDeactivateMessage(resultAction.payload.message || "User deactivated successfully");
+          if (loggedInUser?.organization?.id) {
+            await dispatch(fetchUsers(loggedInUser.organization.id));
+          }
+        } else {
+          setDeactivateMessage(resultAction.payload || "Failed to deactivate user");
         }
-      } else {
-        setDeactivateMessage(resultAction.payload || "Failed to deactivate user");
+        setUserToDeactivate(null);
+      } catch (error) {
+        setDeactivateMessage("Failed to deactivate user");
+        setUserToDeactivate(null);
       }
-      setUserToDeactivate(null);
-    } catch (error) {
-      setDeactivateMessage("Failed to deactivate user");
-      setUserToDeactivate(null);
     }
-  }
-};
+  };
+
   const handleBulkUpdateRole = async () => {
     if (!newRole) return;
 
@@ -210,7 +285,7 @@ const handleDeactivateUser = async () => {
       }
       setSelectedUsers([]);
       setIsEditRoleVisible(false);
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const confirmDelete = async () => {
@@ -219,11 +294,10 @@ const handleDeactivateUser = async () => {
         await dispatch(deleteUser(userToDelete)).unwrap();
         setUserToDelete(null);
         setSelectedUsers((prev) => prev.filter((id) => id !== userToDelete));
-      } catch (error) {}
+      } catch (error) { }
     }
   };
 
-  // Update user functions
   const handleUpdateUser = (user: any) => {
     setUserToUpdate(user);
     setUpdateFormData({
@@ -235,6 +309,7 @@ const handleDeactivateUser = async () => {
       company_id: user.company?.id?.toString() || "none",
       department_id: user.department?.id?.toString() || "none",
       position_id: user.position?.id?.toString() || "none",
+      directSupervisorPositionId: user.position?.directSupervisor?.id?.toString() || "none",
     });
     setIsUpdateModalVisible(true);
   };
@@ -249,6 +324,7 @@ const handleDeactivateUser = async () => {
       company_id: "none",
       department_id: "none",
       position_id: "none",
+      directSupervisorPositionId: "none",
     });
   };
 
@@ -258,7 +334,6 @@ const handleDeactivateUser = async () => {
       [field]: value,
     }));
 
-    // Auto-fill logic for position selection
     if (field === "position_id" && value && value !== "none") {
       const selectedPosition = positions.find(
         (pos) => pos.id === Number(value)
@@ -279,7 +354,6 @@ const handleDeactivateUser = async () => {
       }
     }
 
-    // Clear dependent fields when company changes
     if (field === "company_id") {
       setUpdateFormData((prev) => ({
         ...prev,
@@ -295,7 +369,6 @@ const handleDeactivateUser = async () => {
 
     const updateData: any = {};
 
-    // Only include fields that have values and are not "none"
     if (updateFormData.firstName.trim())
       updateData.firstName = updateFormData.firstName.trim();
     if (updateFormData.lastName.trim())
@@ -305,7 +378,6 @@ const handleDeactivateUser = async () => {
     if (updateFormData.telephone.trim())
       updateData.telephone = updateFormData.telephone.trim();
 
-    // Handle special "none" values by converting to -1 (which will be handled in the backend)
     if (updateFormData.supervisoryLevelId !== "none") {
       updateData.supervisoryLevelId =
         updateFormData.supervisoryLevelId === "none"
@@ -329,6 +401,12 @@ const handleDeactivateUser = async () => {
         updateFormData.position_id === "none"
           ? -1
           : Number(updateFormData.position_id);
+    }
+    if (updateFormData.directSupervisorPositionId !== "none") {
+      updateData.directSupervisorPositionId =
+        updateFormData.directSupervisorPositionId === "none"
+          ? -1
+          : Number(updateFormData.directSupervisorPositionId);
     }
 
     dispatch(updateUser({ userId: userToUpdate.id, userData: updateData }));
@@ -409,114 +487,102 @@ const handleDeactivateUser = async () => {
     );
   };
 
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
+  const PaginationControls = () => {
+    const getPageNumbers = () => {
+      const pages = []
+      const maxVisible = 5
+      let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+      let end = Math.min(totalPages, start + maxVisible - 1)
 
-    const pageNumbers = [];
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    // Always show first page
-    if (startPage > 1) {
-      pageNumbers.push(
-        <Button
-          key={1}
-          onClick={() => handlePageChange(1)}
-          variant="outline"
-          size="sm"
-          className="mx-1 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200"
-        >
-          1
-        </Button>
-      );
-      if (startPage > 2) {
-        pageNumbers.push(
-          <span
-            key="ellipsis-start"
-            className="mx-2 text-slate-400 font-medium"
-          >
-            ...
-          </span>
-        );
+      if (end - start + 1 < maxVisible) {
+        start = Math.max(1, end - maxVisible + 1)
       }
-    }
 
-    // Page numbers
-    for (let i = startPage; i <= endPage; i++) {
-      pageNumbers.push(
-        <Button
-          key={i}
-          onClick={() => handlePageChange(i)}
-          variant={currentPage === i ? "default" : "outline"}
-          size="sm"
-          className={`mx-1 transition-all duration-200 ${
-            currentPage === i
-              ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25 border-0"
-              : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50"
-          }`}
-        >
-          {i}
-        </Button>
-      );
-    }
-
-    // Always show last page
-    if (endPage < totalPages) {
-      if (endPage < totalPages - 1) {
-        pageNumbers.push(
-          <span key="ellipsis-end" className="mx-2 text-slate-400 font-medium">
-            ...
-          </span>
-        );
+      for (let i = start; i <= end; i++) {
+        pages.push(i)
       }
-      pageNumbers.push(
-        <Button
-          key={totalPages}
-          onClick={() => handlePageChange(totalPages)}
-          variant="outline"
-          size="sm"
-          className="mx-1 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200"
-        >
-          {totalPages}
-        </Button>
-      );
+      return pages
     }
+
+    if (totalPages <= 1) return null
 
     return (
-      <div className="flex justify-center items-center mt-8 p-4 bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl border border-slate-200">
-        <Button
-          onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-          disabled={currentPage === 1}
-          variant="outline"
-          size="sm"
-          className="mr-3 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-
-        <div className="flex items-center bg-white rounded-lg p-1 shadow-sm border border-slate-200">
-          {pageNumbers}
+      <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-t border-gray-200">
+        <div className="flex items-center text-sm text-gray-700 font-medium">
+          <span className="text-gray-600">
+            Showing <span className="font-semibold text-gray-900">{indexOfFirstUser + 1}</span> to{" "}
+            <span className="font-semibold text-gray-900">{Math.min(indexOfLastUser, filteredUsers.length)}</span> of{" "}
+            <span className="font-semibold text-gray-900">{filteredUsers.length}</span> users
+          </span>
+          <select
+            value={usersPerPage}
+            onChange={(e) => {
+              setUsersPerPage(Number(e.target.value))
+              setCurrentPage(1)
+            }}
+            className="ml-4 border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+          >
+            <option value={5}>5 per page</option>
+            <option value={10}>10 per page</option>
+            <option value={20}>20 per page</option>
+            <option value={50}>50 per page</option>
+          </select>
         </div>
 
-        <Button
-          onClick={() =>
-            handlePageChange(Math.min(totalPages, currentPage + 1))
-          }
-          disabled={currentPage === totalPages}
-          variant="outline"
-          size="sm"
-          className="ml-3 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="First page"
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="Previous page"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          {getPageNumbers().map((page) => (
+            <button
+              key={page}
+              onClick={() => setCurrentPage(page)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-sm ${
+                page === currentPage
+                  ? "bg-emerald-500 text-white border border-emerald-500 shadow-emerald-200"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="Next page"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="Last page"
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-    );
-  };
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -526,21 +592,14 @@ const handleDeactivateUser = async () => {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="mb-8"
+          className="mb-4"
         >
-          <div className="flex items-center justify-between mb-6">
-            <div>
+          <div className="flex items-center justify-between">
+            <div className="mt-3">
               <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-gray-700 to-slate-600 bg-clip-text text-transparent">
                 User Management
               </h1>
-              <p className="text-slate-600 mt-3 text-lg font-medium">
-                Manage user accounts, roles, and permissions with ease
-              </p>
-            </div>
-            <div className="hidden md:flex items-center space-x-3">
-              <div className="bg-white rounded-full p-3 shadow-lg border border-slate-200">
-                <Settings className="h-6 w-6 text-emerald-600" />
-              </div>
+
             </div>
           </div>
         </motion.div>
@@ -551,126 +610,83 @@ const handleDeactivateUser = async () => {
           </div>
         ) : (
           <>
-            {/* Stats Cards */}
+            {/* Enhanced Stats Cards */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8"
+              transition={{ duration: 0.6 }}
+              className="mb-6"
             >
-              <Card className="bg-gradient-to-br from-white to-slate-50 shadow-lg hover:shadow-xl transition-all duration-300 border-0 ring-1 ring-slate-200 hover:ring-emerald-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center text-emerald-700">
-                    <div className="bg-emerald-100 rounded-full p-2 mr-3">
-                      <Users className="h-5 w-5 text-emerald-600" />
-                    </div>
-                    Total Users
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-800">
-                    {users.length}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1">
-                    All registered users
-                  </p>
-                </CardContent>
-              </Card>
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="mb-4"
+              >
+                <h2 className="text-xl font-semibold text-gray-800 mb-2">User Analytics</h2>
+              </motion.div>
 
-              <Card className="bg-gradient-to-br from-white to-purple-50 shadow-lg hover:shadow-xl transition-all duration-300 border-0 ring-1 ring-slate-200 hover:ring-purple-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center text-purple-700">
-                    <div className="bg-purple-100 rounded-full p-2 mr-3">
-                      <Shield className="h-5 w-5 text-purple-600" />
-                    </div>
-                    Overall
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-800">
-                    {users.filter((user) => user.role === "overall").length}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1">
-                    System administrators
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <UserSummaryCard
+                  title="Total Users"
+                  value={users.length}
+                  subtitle="All registered"
+                  icon={<Users />}
+                  bgGradient="bg-gradient-to-br from-emerald-500 to-emerald-600"
+                  textColor="text-white"
+                  loading={loading}
+                />
 
-              <Card className="bg-gradient-to-br from-white to-blue-50 shadow-lg hover:shadow-xl transition-all duration-300 border-0 ring-1 ring-slate-200 hover:ring-blue-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center text-blue-700">
-                    <div className="bg-blue-100 rounded-full p-2 mr-3">
-                      <User className="h-5 w-5 text-blue-600" />
-                    </div>
-                    Supervisor
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-800">
-                    {users.filter((user) => user.role === "supervisor").length}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Team supervisors
-                  </p>
-                </CardContent>
-              </Card>
+                <UserSummaryCard
+                  title="Overall"
+                  value={users.filter((user) => user.role === "overall").length}
+                  subtitle="Administrators"
+                  icon={<Shield />}
+                  bgGradient="bg-gradient-to-br from-purple-500 to-purple-600"
+                  textColor="text-white"
+                  loading={loading}
+                />
 
-              <Card className="bg-gradient-to-br from-white to-green-50 shadow-lg hover:shadow-xl transition-all duration-300 border-0 ring-1 ring-slate-200 hover:ring-green-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center text-green-700">
-                    <div className="bg-green-100 rounded-full p-2 mr-3">
-                      <Briefcase className="h-5 w-5 text-green-600" />
-                    </div>
-                    Employee
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-800">
-                    {users.filter((user) => user.role === "employee").length}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Regular employees
-                  </p>
-                </CardContent>
-              </Card>
+                <UserSummaryCard
+                  title="Supervisor"
+                  value={users.filter((user) => user.role === "supervisor").length}
+                  subtitle="Team leaders"
+                  icon={<User />}
+                  bgGradient="bg-gradient-to-br from-blue-500 to-blue-600"
+                  textColor="text-white"
+                  loading={loading}
+                />
 
-              <Card className="bg-gradient-to-br from-white to-red-50 shadow-lg hover:shadow-xl transition-all duration-300 border-0 ring-1 ring-slate-200 hover:ring-red-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center text-red-700">
-                    <div className="bg-red-100 rounded-full p-2 mr-3">
-                      <UserX className="h-5 w-5 text-red-600" />
-                    </div>
-                    Disabled
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-800">
-                    {users.filter((user) => user.role === "disabled").length}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Inactive accounts
-                  </p>
-                </CardContent>
-              </Card>
+                <UserSummaryCard
+                  title="Employee"
+                  value={users.filter((user) => user.role === "employee").length}
+                  subtitle="Regular users"
+                  icon={<Briefcase />}
+                  bgGradient="bg-gradient-to-br from-green-500 to-green-600"
+                  textColor="text-white"
+                  loading={loading}
+                />
 
-              <Card className="bg-gradient-to-br from-white to-teal-50 shadow-lg hover:shadow-xl transition-all duration-300 border-0 ring-1 ring-slate-200 hover:ring-teal-300">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-semibold flex items-center text-teal-700">
-                    <div className="bg-teal-100 rounded-full p-2 mr-3">
-                      <UserCheck className="h-5 w-5 text-teal-600" />
-                    </div>
-                    Active
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-slate-800">
-                    {users.filter((user) => user.role !== "disabled").length}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Currently active
-                  </p>
-                </CardContent>
-              </Card>
+                <UserSummaryCard
+                  title="Disabled"
+                  value={users.filter((user) => user.role === "disabled").length}
+                  subtitle="Inactive"
+                  icon={<UserX />}
+                  bgGradient="bg-gradient-to-br from-red-500 to-red-600"
+                  textColor="text-white"
+                  loading={loading}
+                />
+
+                <UserSummaryCard
+                  title="Active"
+                  value={users.filter((user) => user.role !== "disabled").length}
+                  subtitle="Currently active"
+                  icon={<UserCheck />}
+                  bgGradient="bg-gradient-to-br from-teal-500 to-teal-600"
+                  textColor="text-white"
+                  loading={loading}
+                />
+              </div>
             </motion.div>
 
             {/* Filters Card */}
@@ -680,7 +696,7 @@ const handleDeactivateUser = async () => {
               transition={{ duration: 0.6, delay: 0.2 }}
             >
               <Card className="mb-8 bg-gradient-to-r from-white to-slate-50 shadow-lg border-0 ring-1 ring-slate-200">
-                <CardContent className="p-6">
+                <div className="p-6">
                   <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
                     {/* Search Bar */}
                     <div className="relative w-full xl:w-80">
@@ -757,260 +773,273 @@ const handleDeactivateUser = async () => {
                           </SelectItem>
                         </SelectContent>
                       </Select>
-                      <Select
-                        value={usersPerPage.toString()}
-                        onValueChange={(value) =>
-                          setUsersPerPage(Number(value))
-                        }
-                      >
-                        <SelectTrigger className="w-48 bg-white border-slate-200 focus:border-emerald-400 focus:ring-emerald-400 rounded-xl shadow-sm transition-all duration-200">
-                          <SelectValue placeholder="Results per page" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-xl">
-                          <SelectItem
-                            value="10"
-                            className="hover:bg-emerald-50"
-                          >
-                            10 per page
-                          </SelectItem>
-                          <SelectItem
-                            value="25"
-                            className="hover:bg-emerald-50"
-                          >
-                            25 per page
-                          </SelectItem>
-                          <SelectItem
-                            value="50"
-                            className="hover:bg-emerald-50"
-                          >
-                            50 per page
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
                     </div>
                   </div>
-                </CardContent>
+                </div>
               </Card>
             </motion.div>
-
-            {/* Users Table */}
-            {error ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="border-red-200 bg-gradient-to-r from-red-50 to-rose-50 shadow-lg">
-                  <CardContent className="p-8">
-                    <div className="text-red-600 flex flex-col items-center justify-center py-8">
-                      <div className="bg-red-100 rounded-full p-4 mb-4">
-                        <UserX className="h-8 w-8 text-red-600" />
-                      </div>
-                      <p className="mb-4 font-semibold text-lg">{error}</p>
-                      <Button
-                        onClick={() =>
-                          loggedInUser?.organization?.id &&
-                          dispatch(fetchUsers(loggedInUser.organization.id))
-                        }
-                        variant="outline"
-                        className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all duration-200"
-                      >
-                        Try Again
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-              >
-                <Card className="bg-white shadow-xl border-0 ring-1 ring-slate-200 overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <Table>
-<TableHeader>
-  <TableRow className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-slate-200">
-    <TableHead className="w-16 font-semibold text-slate-700 py-4">
-      #
-    </TableHead>
-    <TableHead className="font-semibold text-slate-700 py-4">
-      User Name
-    </TableHead>
-
-    <TableHead className="font-semibold text-slate-700 py-4">
-      Company
-    </TableHead>
-    <TableHead className="font-semibold text-slate-700 py-4">
-      Department
-    </TableHead>
-        <TableHead className="font-semibold text-slate-700 py-4">
-      Position
-    </TableHead>
-    <TableHead className="font-semibold text-slate-700 py-4">
-      Level
-    </TableHead>
+{/* Enhanced Users Table */}
+{error ? (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.95 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 0.3 }}
+  >
+    <Card className="border-red-200 bg-gradient-to-r from-red-50 to-rose-50 shadow-lg">
+      <div className="p-8">
+        <div className="text-red-600 flex flex-col items-center justify-center py-8">
+          <div className="bg-red-100 rounded-full p-4 mb-4">
+            <UserX className="h-8 w-8 text-red-600" />
+          </div>
+          <p className="mb-4 font-semibold text-lg">{error}</p>
+          <Button
+            onClick={() =>
+              loggedInUser?.organization?.id &&
+              dispatch(fetchUsers(loggedInUser.organization.id))
+            }
+            variant="outline"
+            className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all duration-200"
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    </Card>
+  </motion.div>
+) : (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, delay: 0.3 }}
+    className="w-full"
+  >
+    {/* Enhanced Smart Table */}
+    <div className="bg-white rounded-lg shadow-md overflow-auto">
+      <div className="min-w-[1200px]"> {/* Set minimum width to ensure content fits */}
+        <table className="w-full text-sm text-left text-gray-600">
+<thead className="text-xs text-gray-700 uppercase bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+  <tr>
+    <th scope="col" className="px-4 py-3 font-semibold">
+      <div className="flex items-center gap-2">
+        <span>#</span>
+      </div>
+    </th>
+    <th scope="col" className="px-4 py-3 font-semibold min-w-[180px]">
+      <div className="flex items-center gap-2">
+        <FileText className="h-4 w-4 text-blue-500" /> {/* blue = document */}
+        <span>User Name</span>
+      </div>
+    </th>
+    <th scope="col" className="px-4 py-3 font-semibold min-w-[150px]">
+      <div className="flex items-center gap-2">
+        <Building2 className="h-4 w-4 text-indigo-500" /> {/* indigo = company/structure */}
+        <span>Company</span>
+      </div>
+    </th>
+    <th scope="col" className="px-4 py-3 font-semibold min-w-[150px]">
+      <div className="flex items-center gap-2">
+        <BarChart2 className="h-4 w-4 text-green-600" /> {/* green = stats/growth */}
+        <span>Department</span>
+      </div>
+    </th>
+    <th scope="col" className="px-4 py-3 font-semibold min-w-[150px]">
+      <div className="flex items-center gap-2">
+        <Briefcase className="h-4 w-4 text-orange-500" /> {/* orange = work/role */}
+        <span>Position</span>
+      </div>
+    </th>
+    <th scope="col" className="px-4 py-3 font-semibold min-w-[180px]">
+      <div className="flex items-center gap-2">
+        <User className="h-4 w-4 text-teal-500" /> {/* teal = person/supervisor */}
+        <span>Direct Supervisor</span>
+      </div>
+    </th>
+    <th scope="col" className="px-4 py-3 font-semibold min-w-[120px]">
+      <div className="flex items-center gap-2">
+        <Shield className="h-4 w-4 text-red-500" /> {/* red = level/protection */}
+        <span>Level</span>
+      </div>
+    </th>
     {loggedInUser?.role !== "overall" && (
-      <TableHead className="text-right font-semibold text-slate-700 py-4">
-        Actions
-      </TableHead>
+      <th scope="col" className="px-4 py-3 font-semibold min-w-[150px]">
+        <div className="flex items-center gap-2">
+          <span>Actions</span>
+        </div>
+      </th>
     )}
-  </TableRow>
-</TableHeader>
-<TableBody>
-  <AnimatePresence>
-    {currentUsers.map((tableUser, index) => (
-      <motion.tr
-        key={tableUser.id}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 20 }}
-        transition={{
-          duration: 0.3,
-          delay: index * 0.05,
-        }}
-        className="hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 transition-all duration-200 border-b border-slate-100"
-      >
-        <TableCell className="font-medium text-slate-600 py-4">
-          <div className="bg-slate-100 rounded-full w-8 h-8 flex items-center justify-center text-sm font-semibold text-slate-700">
-            {indexOfFirstUser + index + 1}
-          </div>
-        </TableCell>
+  </tr>
+</thead>
 
-        <TableCell className="py-4">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full w-10 h-10 flex items-center justify-center text-white font-semibold text-sm shadow-lg">
-              {getInitials(tableUser.username)}
-            </div>
-            <div>
-              <p className="font-semibold text-slate-800">
-                {tableUser.username}
-              </p>
-            </div>
-          </div>
-        </TableCell>
-
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.company?.name ||
-              loggedInUser?.organization?.name ||
-              "N/A"}
-          </span>
-        </TableCell>
-
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.department?.name || "N/A"}
-          </span>
-        </TableCell>
-
-                {/* Position column (instead of email) */}
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.position?.title || "N/A"}
-          </span>
-        </TableCell>
-
-        <TableCell className="py-4">
-          <span className="text-slate-600 font-medium">
-            {tableUser.supervisoryLevel?.level || "N/A"}
-          </span>
-        </TableCell>
-
-        <TableCell className="text-right py-4">
-          <div className="flex justify-end space-x-2">
-            {loggedInUser?.role !== "overall" && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 px-3 bg-white text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-all duration-200 shadow-sm"
-                  onClick={() => handleUpdateUser(tableUser)}
+          <tbody className="divide-y divide-gray-100">
+            <AnimatePresence>
+              {currentUsers.map((tableUser, index) => (
+                <motion.tr
+                  key={tableUser.id}
+                  className="bg-white hover:bg-gray-50 transition-all duration-200"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: index * 0.05 }}
                 >
-                  <Edit className="h-4 w-4" />
-                  <span className="sr-only md:not-sr-only md:ml-2">
-                    Edit
-                  </span>
-                </Button>
-<Button
-          variant="outline"
-          size="sm"
-          className={`h-9 px-3 bg-white ${tableUser.isActive ? "text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 hover:text-red-700" : "text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 hover:text-green-700"} transition-all duration-200 shadow-sm`}
-          onClick={() => setUserToDeactivate(tableUser.id)}
-        >
-          {tableUser.isActive ? (
-            <>
-              <UserX className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:ml-2">Deactivate</span>
-            </>
-          ) : (
-            <>
-              <UserCheck className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:ml-2">Inactive</span>
-            </>
-          )}
-        </Button>
-              </>
-            )}
-          </div>
-        </TableCell>
-      </motion.tr>
-    ))}
-  </AnimatePresence>
-</TableBody>
-                      </Table>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full text-sm font-semibold text-gray-600">
+                      {indexOfFirstUser + index + 1}
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
+                  </td>
 
-            {/* Pagination */}
-            {renderPagination()}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center space-x-3">
+
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">
+                          {tableUser.username}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {tableUser.company?.name ||
+                      loggedInUser?.organization?.name ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm text-gray-700" title={tableUser.company?.name || loggedInUser?.organization?.name}>
+                          {tableUser.company?.name || loggedInUser?.organization?.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {tableUser.department?.name ? (
+                      <span className="text-sm text-gray-700">
+                        {tableUser.department.name}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {tableUser.position?.title ? (
+                      <span className="text-sm text-gray-700">
+                        {tableUser.position.title}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-700">
+                        {tableUser.position?.directSupervisor
+                          ? `${tableUser.position.directSupervisor.title}`
+                          : "Top level Supervisor"}
+                      </span>
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {tableUser.supervisoryLevel?.level ? (
+                      <span className="text-sm text-gray-700">
+                        {tableUser.supervisoryLevel.level}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
+                  </td>
+
+                  {loggedInUser?.role !== "overall" && (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleUpdateUser(tableUser)}
+                          className="flex items-center px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition duration-150 shadow"
+                          title="Edit User"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                          <span className="ml-1">Edit</span>
+                        </button>
+
+                        <button
+                          onClick={() => setUserToDeactivate(tableUser.id)}
+                          className={`flex items-center px-3 py-1.5 text-xs font-medium rounded transition duration-150 shadow ${
+                            tableUser.isActive 
+                              ? "bg-red-600 text-white hover:bg-red-700" 
+                              : "bg-green-600 text-white hover:bg-green-700"
+                          }`}
+                          title={tableUser.isActive ? "Deactivate User" : "Activate User"}
+                        >
+                          {tableUser.isActive ? (
+                            <UserX className="h-3.5 w-3.5" />
+                          ) : (
+                            <UserCheck className="h-3.5 w-3.5" />
+                          )}
+                          <span className="ml-1">
+                            {tableUser.isActive ? "Deactivate" : "Activate"}
+                          </span>
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </motion.tr>
+              ))}
+            </AnimatePresence>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination Controls */}
+      <PaginationControls />
+    </div>
+  </motion.div>
+)}
           </>
         )}
 
-        {/* Update User Modal - Fixed positioning and layout */}
+{/* Update User Modal - Enhanced modern styling */}
         <Dialog
           open={isUpdateModalVisible}
           onOpenChange={setIsUpdateModalVisible}
         >
-          <DialogContent className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border-0 shadow-2xl rounded-3xl w-[90vw] max-w-6xl max-h-[90vh] overflow-y-auto z-50">
-            <DialogHeader className="sticky top-0 bg-white z-10 pb-6 px-8  pt-0 border-b border-slate-100">
-              <DialogTitle className="text-2xl font-bold text-slate-800 flex items-center">
-                <div className="bg-blue-50 rounded-full p-3 mr-4 border border-blue-100">
-                  <Edit className="h-6 w-6 text-blue-600" />
+          <DialogContent className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border-0 shadow-2xl rounded-2xl w-[92vw] max-w-6xl max-h-[92vh] overflow-hidden z-50">
+            {/* Compact Smart Header */}
+            <DialogHeader className="sticky top-0 bg-gradient-to-r from-white via-slate-50 to-white z-20 px-6 py-4 border-b border-slate-200 shadow-sm">
+              <DialogTitle className="text-xl font-bold text-slate-800 flex items-center">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-2.5 mr-3 border border-blue-200">
+                  <Edit className="h-5 w-5 text-blue-600" />
                 </div>
-                <div>
-                  <span className="block">Update User</span>
-                  <span className="text-lg font-medium text-slate-600 block mt-1">
+                <div className="flex-1">
+                  <span className="block text-lg">Update User</span>
+                  <span className="text-sm font-medium text-slate-600 block">
                     {userToUpdate?.username}
                   </span>
                 </div>
               </DialogTitle>
             </DialogHeader>
 
-            <div className="px-8 py-6">
-              <div className="space-y-8">
+            {/* Scrollable Content Area */}
+            <div className="overflow-y-auto max-h-[calc(92vh-140px)] px-6 py-4">
+              <div className="space-y-6">
                 {/* Personal Information Section */}
-                <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-8 border border-slate-200">
-                  <div className="mb-8">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center mb-4">
-                      <div className="bg-slate-200 rounded-full p-3 mr-4">
-                        <User className="h-6 w-6 text-slate-700" />
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-6 border border-slate-200 shadow-sm">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center mb-3">
+                      <div className="bg-gradient-to-r from-slate-200 to-slate-300 rounded-lg p-2 mr-3">
+                        <User className="h-4 w-4 text-slate-700" />
                       </div>
                       Personal Information
                     </h3>
-                    <div className="h-1 bg-slate-300 rounded-full">
-                      <div className="h-full bg-blue-500 rounded-full w-16 transition-all duration-300"></div>
+                    <div className="h-0.5 bg-slate-300 rounded-full">
+                      <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full w-12 transition-all duration-300"></div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
-                    <div className="space-y-3">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                         First Name
                       </label>
                       <Input
@@ -1019,12 +1048,12 @@ const handleDeactivateUser = async () => {
                           handleUpdateFormChange("firstName", e.target.value)
                         }
                         placeholder="Enter first name"
-                        className="bg-slate-100 border-2 border-slate-300 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 cursor-not-allowed opacity-70"
+                        className="bg-slate-100 border border-slate-300 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-not-allowed opacity-70"
                         disabled
                       />
                     </div>
-                    <div className="space-y-3">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                         Last Name
                       </label>
                       <Input
@@ -1033,12 +1062,12 @@ const handleDeactivateUser = async () => {
                           handleUpdateFormChange("lastName", e.target.value)
                         }
                         placeholder="Enter last name"
-                        className="bg-slate-100 border-2 border-slate-300 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 cursor-not-allowed opacity-70"
+                        className="bg-slate-100 border border-slate-300 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-not-allowed opacity-70"
                         disabled
                       />
                     </div>
-                    <div className="space-y-3">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                         Email Address
                       </label>
                       <Input
@@ -1048,12 +1077,12 @@ const handleDeactivateUser = async () => {
                           handleUpdateFormChange("email", e.target.value)
                         }
                         placeholder="Enter email address"
-                        className="bg-slate-100 border-2 border-slate-300 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 cursor-not-allowed opacity-70"
+                        className="bg-slate-100 border border-slate-300 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-not-allowed opacity-70"
                         disabled
                       />
                     </div>
-                    <div className="space-y-3">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                         Telephone
                       </label>
                       <Input
@@ -1062,31 +1091,31 @@ const handleDeactivateUser = async () => {
                           handleUpdateFormChange("telephone", e.target.value)
                         }
                         placeholder="Enter telephone number"
-                        className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 hover:border-slate-400"
+                        className="bg-white border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 hover:border-slate-400"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Company Information Section */}
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-8 border border-blue-200">
-                  <div className="mb-8">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center mb-4">
-                      <div className="bg-blue-200 rounded-full p-3 mr-4">
-                        <Briefcase className="h-6 w-6 text-blue-700" />
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200 shadow-sm">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center mb-3">
+                      <div className="bg-gradient-to-r from-blue-200 to-blue-300 rounded-lg p-2 mr-3">
+                        <Briefcase className="h-4 w-4 text-blue-700" />
                       </div>
                       Company Information
                     </h3>
-                    <div className="h-1 bg-blue-300 rounded-full">
-                      <div className="h-full bg-blue-600 rounded-full w-20 transition-all duration-300"></div>
+                    <div className="h-0.5 bg-blue-300 rounded-full">
+                      <div className="h-full bg-gradient-to-r from-blue-600 to-blue-700 rounded-full w-16 transition-all duration-300"></div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {/* Company Selection (only if has subsidiaries) */}
                     {hasSubsidiaries && organizationStructure?.subsidiaries && (
-                      <div className="space-y-3">
-                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                           Company
                         </label>
                         <Select
@@ -1095,13 +1124,13 @@ const handleDeactivateUser = async () => {
                             handleUpdateFormChange("company_id", value)
                           }
                         >
-                          <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 hover:border-slate-400">
+                          <SelectTrigger className="bg-white border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 hover:border-slate-400">
                             <SelectValue placeholder="Select company" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white border-slate-200 shadow-xl rounded-xl">
+                          <SelectContent className="bg-white border-slate-200 shadow-xl rounded-lg max-h-48">
                             <SelectItem
                               value="none"
-                              className="rounded-lg text-base py-3"
+                              className="rounded-md text-sm py-2 hover:bg-slate-50"
                             >
                               No Company
                             </SelectItem>
@@ -1110,7 +1139,7 @@ const handleDeactivateUser = async () => {
                                 <SelectItem
                                   key={company.id}
                                   value={company.id.toString()}
-                                  className="rounded-lg text-base py-3"
+                                  className="rounded-md text-sm py-2 hover:bg-slate-50"
                                 >
                                   {company.name}
                                 </SelectItem>
@@ -1122,8 +1151,8 @@ const handleDeactivateUser = async () => {
                     )}
 
                     {/* Position Selection */}
-                    <div className="space-y-3">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                         Position
                       </label>
                       <Select
@@ -1132,13 +1161,13 @@ const handleDeactivateUser = async () => {
                           handleUpdateFormChange("position_id", value)
                         }
                       >
-                        <SelectTrigger className="bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 hover:border-slate-400">
+                        <SelectTrigger className="bg-white border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 hover:border-slate-400">
                           <SelectValue placeholder="Select position" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-xl">
+                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-lg max-h-48">
                           <SelectItem
                             value="none"
-                            className="rounded-lg text-base py-3"
+                            className="rounded-md text-sm py-2 hover:bg-slate-50"
                           >
                             No Position
                           </SelectItem>
@@ -1146,7 +1175,7 @@ const handleDeactivateUser = async () => {
                             <SelectItem
                               key={position.id}
                               value={position.id.toString()}
-                              className="rounded-lg text-base py-3"
+                              className="rounded-md text-sm py-2 hover:bg-slate-50"
                             >
                               {position.title}
                             </SelectItem>
@@ -1155,9 +1184,62 @@ const handleDeactivateUser = async () => {
                       </Select>
                     </div>
 
+                    {/* Direct Supervisor Position Selection */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                        Direct Supervisor Position
+                      </label>
+                      <Select
+                        value={updateFormData.directSupervisorPositionId}
+                        onValueChange={(value) =>
+                          handleUpdateFormChange("directSupervisorPositionId", value)
+                        }
+                        disabled={updateFormData.position_id === "none"}
+                      >
+                        <SelectTrigger
+                          className={`bg-white border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            updateFormData.position_id === "none"
+                              ? "opacity-60 cursor-not-allowed bg-slate-100"
+                              : "hover:border-slate-400"
+                          }`}
+                        >
+                          <SelectValue
+                            placeholder={
+                              updateFormData.position_id === "none"
+                                ? "Select position first"
+                                : "Select direct supervisor position"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-lg max-h-48">
+                          <SelectItem
+                            value="none"
+                            className="rounded-md text-sm py-2 hover:bg-slate-50"
+                          >
+                            No Supervisor Position
+                          </SelectItem>
+                          {positions
+                            .filter((pos) => 
+                              pos.id !== Number(updateFormData.position_id) &&
+                              (updateFormData.company_id === "none" || 
+                               pos.company?.id === Number(updateFormData.company_id))
+                            )
+                            .map((position) => (
+                              <SelectItem
+                                key={position.id}
+                                value={position.id.toString()}
+                                className="rounded-md text-sm py-2 hover:bg-slate-50"
+                              >
+                                {position.title} ({position.department?.name || "No Department"})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     {/* Department Selection */}
-                    <div className="space-y-3">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                         Department
                       </label>
                       <Select
@@ -1168,11 +1250,10 @@ const handleDeactivateUser = async () => {
                         disabled={updateFormData.position_id !== "none"}
                       >
                         <SelectTrigger
-                          className={`bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 ${
-                            updateFormData.position_id !== "none"
+                          className={`bg-white border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${updateFormData.position_id !== "none"
                               ? "opacity-60 cursor-not-allowed bg-slate-100"
                               : "hover:border-slate-400"
-                          }`}
+                            }`}
                         >
                           <SelectValue
                             placeholder={
@@ -1182,10 +1263,10 @@ const handleDeactivateUser = async () => {
                             }
                           />
                         </SelectTrigger>
-                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-xl">
+                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-lg max-h-48">
                           <SelectItem
                             value="none"
-                            className="rounded-lg text-base py-3"
+                            className="rounded-md text-sm py-2 hover:bg-slate-50"
                           >
                             No Department
                           </SelectItem>
@@ -1193,7 +1274,7 @@ const handleDeactivateUser = async () => {
                             <SelectItem
                               key={dept.id}
                               value={dept.id.toString()}
-                              className="rounded-lg text-base py-3"
+                              className="rounded-md text-sm py-2 hover:bg-slate-50"
                             >
                               {dept.name}
                             </SelectItem>
@@ -1201,10 +1282,10 @@ const handleDeactivateUser = async () => {
                         </SelectContent>
                       </Select>
                       {updateFormData.position_id !== "none" && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 mt-2">
                           <p className="text-xs text-blue-700 font-medium flex items-center">
                             <svg
-                              className="h-4 w-4 mr-2"
+                              className="h-3 w-3 mr-2 flex-shrink-0"
                               fill="currentColor"
                               viewBox="0 0 20 20"
                             >
@@ -1214,16 +1295,15 @@ const handleDeactivateUser = async () => {
                                 clipRule="evenodd"
                               />
                             </svg>
-                            Department is automatically filled based on selected
-                            position
+                            Department is automatically filled based on selected position
                           </p>
                         </div>
                       )}
                     </div>
 
                     {/* Supervisory Level Selection */}
-                    <div className="space-y-3">
-                      <label className="block text-sm font-bold text-slate-700 mb-2">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
                         Supervisory Level
                       </label>
                       <Select
@@ -1234,11 +1314,10 @@ const handleDeactivateUser = async () => {
                         disabled={updateFormData.position_id !== "none"}
                       >
                         <SelectTrigger
-                          className={`bg-white border-2 border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-14 px-4 rounded-xl text-base font-medium transition-all duration-200 ${
-                            updateFormData.position_id !== "none"
+                          className={`bg-white border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 h-10 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${updateFormData.position_id !== "none"
                               ? "opacity-60 cursor-not-allowed bg-slate-100"
                               : "hover:border-slate-400"
-                          }`}
+                            }`}
                         >
                           <SelectValue
                             placeholder={
@@ -1248,10 +1327,10 @@ const handleDeactivateUser = async () => {
                             }
                           />
                         </SelectTrigger>
-                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-xl">
+                        <SelectContent className="bg-white border-slate-200 shadow-xl rounded-lg max-h-48">
                           <SelectItem
                             value="none"
-                            className="rounded-lg text-base py-3"
+                            className="rounded-md text-sm py-2 hover:bg-slate-50"
                           >
                             No Level
                           </SelectItem>
@@ -1259,7 +1338,7 @@ const handleDeactivateUser = async () => {
                             <SelectItem
                               key={level.id}
                               value={level.id.toString()}
-                              className="rounded-lg text-base py-3"
+                              className="rounded-md text-sm py-2 hover:bg-slate-50"
                             >
                               {level.level}
                             </SelectItem>
@@ -1267,10 +1346,10 @@ const handleDeactivateUser = async () => {
                         </SelectContent>
                       </Select>
                       {updateFormData.position_id !== "none" && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 mt-2">
                           <p className="text-xs text-blue-700 font-medium flex items-center">
                             <svg
-                              className="h-4 w-4 mr-2"
+                              className="h-3 w-3 mr-2 flex-shrink-0"
                               fill="currentColor"
                               viewBox="0 0 20 20"
                             >
@@ -1280,8 +1359,7 @@ const handleDeactivateUser = async () => {
                                 clipRule="evenodd"
                               />
                             </svg>
-                            Supervisory level is automatically filled based on
-                            selected position
+                            Supervisory level is automatically filled based on selected position
                           </p>
                         </div>
                       )}
@@ -1291,7 +1369,8 @@ const handleDeactivateUser = async () => {
               </div>
             </div>
 
-            <DialogFooter className="sticky bottom-0 bg-white z-10 gap-6 px-8 pb-8 pt-6 border-t border-slate-100">
+            {/* Compact Smart Footer */}
+            <DialogFooter className="sticky bottom-0 bg-gradient-to-r from-white via-slate-50 to-white z-20 flex justify-end gap-3 px-6 py-4 border-t border-slate-200 shadow-sm">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -1299,25 +1378,25 @@ const handleDeactivateUser = async () => {
                   setUserToUpdate(null);
                   resetUpdateForm();
                 }}
-                className="border-2 border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all duration-200 h-14 px-8 rounded-xl font-semibold text-base"
+                className="border border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all duration-200 h-10 px-6 rounded-lg font-semibold text-sm"
                 disabled={updateLoading}
               >
-                <X className="h-5 w-5 mr-3" />
+                <X className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
               <Button
                 onClick={handleSubmitUpdate}
                 disabled={updateLoading}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/25 transition-all duration-200 h-14 px-10 rounded-xl font-semibold text-base"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/25 transition-all duration-200 h-10 px-8 rounded-lg font-semibold text-sm"
               >
                 {updateLoading ? (
                   <>
-                    <Loader2 className="h-5 w-5 mr-3 animate-spin" />
-                    Updating User...
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
                   </>
                 ) : (
                   <>
-                    <Save className="h-5 w-5 mr-3" />
+                    <Save className="h-4 w-4 mr-2" />
                     Update User
                   </>
                 )}
@@ -1325,7 +1404,6 @@ const handleDeactivateUser = async () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
         {/* Edit Role Dialog */}
         <Dialog open={isEditRoleVisible} onOpenChange={setIsEditRoleVisible}>
           <DialogContent className="bg-white border-0 shadow-2xl rounded-2xl max-w-md">
@@ -1412,37 +1490,37 @@ const handleDeactivateUser = async () => {
           </AlertDialogContent>
         </AlertDialog>
         <AlertDialog
-  open={!!userToDeactivate}
-  onOpenChange={() => setUserToDeactivate(null)}
->
-  <AlertDialogContent className="bg-white border-0 shadow-2xl rounded-2xl max-w-md">
-    <AlertDialogHeader className="pb-4">
-      <AlertDialogTitle className="text-xl font-bold text-slate-800 flex items-center">
-        <div className="bg-red-100 rounded-full p-2 mr-3">
-          <UserX className="h-5 w-5 text-red-600" />
-        </div>
-        Are you absolutely sure?
-      </AlertDialogTitle>
-      <AlertDialogDescription className="text-slate-600 text-base leading-relaxed">
-        This action will deactivate the user account and cannot be undone. All associated data will be preserved but the user will not be able to log in.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter className="gap-3">
-      <AlertDialogCancel className="border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200">
-        Cancel
-      </AlertDialogCancel>
-      <AlertDialogAction
-        onClick={handleDeactivateUser}
-        className="bg-gradient-to-r from-red-500 to-rose-600 text-white hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25 transition-all duration-200"
-      >
-        Deactivate User
-      </AlertDialogAction>
-    </AlertDialogFooter>
-    {deactivateMessage && (
-      <div className="mt-4 text-center text-sm text-red-600">{deactivateMessage}</div>
-    )}
-  </AlertDialogContent>
-</AlertDialog>
+          open={!!userToDeactivate}
+          onOpenChange={() => setUserToDeactivate(null)}
+        >
+          <AlertDialogContent className="bg-white border-0 shadow-2xl rounded-2xl max-w-md">
+            <AlertDialogHeader className="pb-4">
+              <AlertDialogTitle className="text-xl font-bold text-slate-800 flex items-center">
+                <div className="bg-red-100 rounded-full p-2 mr-3">
+                  <UserX className="h-5 w-5 text-red-600" />
+                </div>
+                Are you absolutely sure?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-600 text-base leading-relaxed">
+                This action will deactivate the user account and cannot be undone. All associated data will be preserved but the user will not be able to log in.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-3">
+              <AlertDialogCancel className="border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeactivateUser}
+                className="bg-gradient-to-r from-red-500 to-rose-600 text-white hover:from-red-600 hover:to-rose-700 shadow-lg shadow-red-500/25 transition-all duration-200"
+              >
+                Deactivate User
+              </AlertDialogAction>
+            </AlertDialogFooter>
+            {deactivateMessage && (
+              <div className="mt-4 text-center text-sm text-red-600">{deactivateMessage}</div>
+            )}
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

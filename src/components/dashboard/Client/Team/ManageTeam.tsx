@@ -236,7 +236,6 @@ const ManageTeam: React.FC = () => {
               )}
             </>
           ) : (
-            // Team Reports View
             <TeamReportComponent teams={filteredTeams} />
           )}
         </CardContent>

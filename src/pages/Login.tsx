@@ -4,14 +4,15 @@ import { motion } from "framer-motion"
 import { FaSignInAlt, FaLock, FaUser, FaEye, FaEyeSlash, FaSpinner } from "react-icons/fa"
 import { useNavigate } from "react-router-dom"
 import * as React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useDispatch, useSelector } from "react-redux"
-import { loginUser, clearErrors, closeFirstLoginModal } from "../Redux/Slices/LoginSlices"
+import { loginUser, clearErrors, closeFirstLoginModal, resetLoadingState } from "../Redux/Slices/LoginSlices"
 import type { AppDispatch, RootState } from "../Redux/store"
 import { Formik, Form, Field, ErrorMessage } from "formik"
 import * as Yup from "yup"
 import { FirstLoginModal } from "../components/Modals/FirstLoginModal"
 import VideoBackground from "../components/VideoBackground/VideoBackground"
+import SEO from "../components/SEO"
 
 const validationSchema = Yup.object().shape({
   username: Yup.string().required("Username is required"),
@@ -45,6 +46,19 @@ const Login: React.FC = () => {
     setShowPassword(!showPassword)
   }
 
+  // Clean up on component mount
+  useEffect(() => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("firstLoginEmail");
+
+    // Reset Redux error state and loading state
+    dispatch(clearErrors());
+    dispatch(resetLoadingState()); // Reset loading state after component mounts
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleCloseModal = () => {
     dispatch(closeFirstLoginModal())
     navigate("/forgot-password")
@@ -55,6 +69,7 @@ const Login: React.FC = () => {
     navigate("/forgot-password")
   }
 
+  // Clean up on component unmount
   React.useEffect(() => {
     return () => {
       dispatch(clearErrors())
@@ -68,6 +83,12 @@ const Login: React.FC = () => {
       className="relative overflow-hidden"
       preserveAspectRatio={false}
     >
+          <SEO 
+        title="Ingata SPro - Staff Performance Monitoring & Task Management System"
+        description="Empower your workforce with Ingata SPro - comprehensive staff performance monitoring platform with real-time task tracking, location monitoring, and performance analytics. Role-based dashboards for supervisors, employees, and administrators."
+        keywords="staff performance monitoring system, task management platform, employee tracking software, workforce management, performance analytics, supervisor dashboard, employee dashboard, task tracking, team management, productivity monitoring, organizational management, performance reporting"
+        url="https://ingata-spro.com"
+      />
       <div className="min-h-screen flex items-center justify-center p-4 relative">
         {/* Enhanced animated background with modern gradients */}
         <motion.div

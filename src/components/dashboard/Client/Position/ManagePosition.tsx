@@ -1,5 +1,5 @@
-
 // @ts-nocheck
+
 "use client"
 
 import React from "react"
@@ -29,11 +29,16 @@ import {
   Filter,
   Building,
   Award,
+  UserCheck,
+  ChevronsLeft,
+  Briefcase,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsRight,
+  AlertCircle,
 } from "lucide-react"
 import { Formik, Form, Field, ErrorMessage } from "formik"
 import * as Yup from "yup"
-import Pagination from "./Pagination"
-import Loader from "../../../ui/Loader"
 import PositionReportCard from "./PositionReportCard"
 
 // Interfaces for API responses
@@ -79,6 +84,7 @@ interface ICompany {
 const validationSchema = Yup.object().shape({
   title: Yup.string().required("Position title is required"),
   supervisory_level_id: Yup.string().required("Supervisory level is required"),
+  direct_supervisor_id: Yup.string().optional(),
 })
 
 const ManagePosition: React.FC = () => {
@@ -160,10 +166,8 @@ const ManagePosition: React.FC = () => {
             setCompanies(companiesResponse.data.data.companies)
           }
         } catch (companyError) {
-          console.log("Companies endpoint not available, continuing without company data")
         }
       } catch (error) {
-        console.error("Error fetching data:", error)
       } finally {
         setIsDataLoading(false)
       }
@@ -284,7 +288,31 @@ const ManagePosition: React.FC = () => {
       .then(() => setIsDataLoading(false))
       .catch(() => setIsDataLoading(false))
   }
+  const [availableSupervisors, setAvailableSupervisors] = useState<AvailableSupervisor[]>([])
 
+  // Add this useEffect to fetch supervisors when modal opens
+  useEffect(() => {
+    if (isEditModalOpen && user?.organization?.id) {
+      const fetchSupervisors = async () => {
+        try {
+          const token = localStorage.getItem("token")
+          const response = await axios.get<APIResponse<AvailableSupervisor[]>>(
+            `${import.meta.env.VITE_BASE_URL}/v1/position/${user.organization.id}/supervisors`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          )
+          if (response.data.success) {
+            setAvailableSupervisors(response.data.data)
+          }
+        } catch (error) {
+        }
+      }
+      fetchSupervisors()
+    }
+  }, [isEditModalOpen, user?.organization?.id])
   // Render edit modal
   const renderEditModal = () => (
     <AnimatePresence>
@@ -318,7 +346,9 @@ const ManagePosition: React.FC = () => {
                         company_id: selectedPosition.company?.id || "",
                         department_id: selectedPosition.department?.id || "",
                         supervisory_level_id: selectedPosition.supervisoryLevel?.id || "",
+                        direct_supervisor_id: selectedPosition.directSupervisor?.id || "",
                       }}
+
                       validationSchema={validationSchema}
                       onSubmit={async (values) => {
                         if (isRateLimited) {
@@ -333,6 +363,7 @@ const ManagePosition: React.FC = () => {
                           isActive: values.isActive,
                           department_id: Number(values.department_id),
                           supervisory_level_id: Number(values.supervisory_level_id),
+                          direct_supervisor_id: values.direct_supervisor_id ? Number(values.direct_supervisor_id) : null,
                           company_id: values.company_id ? Number(values.company_id) : null,
                         }
 
@@ -470,7 +501,32 @@ const ManagePosition: React.FC = () => {
                                 </label>
                               </div>
                             </div>
-
+                            {/* Direct Supervisor Selection */}
+                            <div className="md:col-span-2">
+                              <label htmlFor="direct_supervisor_id" className="block text-sm font-medium text-gray-700">
+                                <UserCheck className="inline h-4 w-4 mr-1" />
+                                Direct Supervisor (Optional)
+                              </label>
+                              <Field
+                                as="select"
+                                name="direct_supervisor_id"
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                              >
+                                <option value="">None (Top Level Position)</option>
+                                {availableSupervisors
+                                  .filter(supervisor => supervisor.id !== selectedPosition.id) // Exclude current position
+                                  .map((supervisor) => (
+                                    <option key={supervisor.id} value={supervisor.id}>
+                                      {supervisor.title}
+                                    </option>
+                                  ))}
+                              </Field>
+                              <ErrorMessage name="direct_supervisor_id" component="div" className="mt-1 text-sm text-red" />
+                              <p className="mt-1 text-sm text-gray-500">
+                                Select an existing position that will serve as the direct supervisor for this position.
+                                Leave empty if this is a top-level position with no supervisor.
+                              </p>
+                            </div>
                             <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                               <button
                                 type="submit"
@@ -593,173 +649,258 @@ const ManagePosition: React.FC = () => {
           </div>
         </div>
 
-        {/* Positions Table */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          {/* Use the Loader component when data is loading */}
-          {isDataLoading ? (
-            <Loader />
-          ) : error ? (
-            <div className="p-6 text-center">
-              <AlertTriangle className="h-12 w-12 text-red mx-auto mb-4" />
-              <p className="text-red">{error}</p>
-              <button
-                onClick={handleRefresh}
-                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Try Again
-              </button>
-            </div>
-          ) : sortedAndFilteredPositions.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-gray-500">No positions found matching your criteria</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {/* Added numerical numbering column */}
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      #
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => requestSort("title")}
-                    >
-                      <div className="flex items-center">
-                        Title
-                        {sortConfig?.key === "title" &&
-                          (sortConfig.direction === "ascending" ? (
-                            <ChevronUp className="h-4 w-4 ml-1" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 ml-1" />
-                          ))}
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Department
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Supervisory Level
-                    </th>
- 
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => requestSort("isActive")}
-                    >
-                      <div className="flex items-center">
-                        Status
-                        {sortConfig?.key === "isActive" &&
-                          (sortConfig.direction === "ascending" ? (
-                            <ChevronUp className="h-4 w-4 ml-1" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 ml-1" />
-                          ))}
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => requestSort("created_at")}
-                    >
-                      <div className="flex items-center">
-                        Created
-                        {sortConfig?.key === "created_at" &&
-                          (sortConfig.direction === "ascending" ? (
-                            <ChevronUp className="h-4 w-4 ml-1" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 ml-1" />
-                          ))}
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {currentItems.map((position, index) => (
-                    <tr key={position.id} className="hover:bg-gray-50">
-                      {/* Numerical numbering cell */}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {indexOfFirstItem + index + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{position.title}</div>
-                        {position.company && <div className="text-xs text-gray-500">{position.company.name}</div>}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Building className="h-4 w-4 text-gray-400 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {position.department?.name || "Not assigned"}
-                            </div>
-                            {position.department?.company && (
-                              <div className="text-xs text-gray-500">{position.department.company.name}</div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Award className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="text-sm text-gray-900">
-                            {position.supervisoryLevel?.level || "Not assigned"}
-                          </span>
-                        </div>
-                      </td>
-             
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            position.isActive ? "bg-green text-white" : "bg-red text-white"
-                          }`}
-                        >
-                          {position.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(position.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleEditClick(position)}
-                          className="text-gray-500 hover:text-indigo-900 mr-4"
-                        >
-                          <Edit className="h-3 w-4" />
-                        </button>
-                        <button onClick={() => handleDeleteClick(position.id)} className="text-red hover:text-red-900">
-                          <Trash2 className="h-3 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+{/* Enhanced Positions Table */}
+<div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+  {isDataLoading ? (
+    <div className="flex justify-center items-center h-64">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+    </div>
+  ) : error ? (
+    <div className="text-center py-12 border rounded-md bg-gray-50">
+      <AlertCircle className="h-12 w-12 mx-auto text-red-500 mb-4" />
+      <p className="text-red-500">{error}</p>
+      <button
+        onClick={handleRefresh}
+        className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+      >
+        <RefreshCw className="h-4 w-4 mr-2" />
+        Try Again
+      </button>
+    </div>
+  ) : sortedAndFilteredPositions.length === 0 ? (
+    <div className="text-center py-12 border rounded-md bg-gray-50">
+      <Briefcase className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+      <p className="text-gray-500">No positions found matching your criteria</p>
+    </div>
+  ) : (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm text-left text-gray-600">
+<thead className="text-xs text-gray-700 uppercase bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+  <tr>
+    <th scope="col" className="px-6 py-4 font-semibold">
+      <div className="flex items-center gap-2">
+        <span>#</span>
+      </div>
+    </th>
 
-        {/* Pagination Component */}
-        {!isDataLoading && sortedAndFilteredPositions.length > 0 && (
-          <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
-        )}
+    <th scope="col" className="px-6 py-4 font-semibold cursor-pointer" onClick={() => requestSort("title")}>
+      <div className="flex items-center gap-2">
+        <Briefcase className="h-4 w-4 text-blue-600" /> {/* Blue for jobs/roles */}
+        <span>Position Title</span>
+        {sortConfig?.key === "title" &&
+          (sortConfig.direction === "ascending" ? (
+            <ChevronUp className="ml-1 h-4 w-4 text-blue-600" />
+          ) : (
+            <ChevronDown className="ml-1 h-4 w-4 text-blue-600" />
+          ))}
+      </div>
+    </th>
+
+    <th scope="col" className="px-6 py-4 font-semibold">
+      <div className="flex items-center gap-2">
+        <Building className="h-4 w-4 text-indigo-500" /> {/* Indigo for departments */}
+        <span>Department</span>
+      </div>
+    </th>
+
+    <th scope="col" className="px-6 py-4 font-semibold">
+      <div className="flex items-center gap-2">
+        <Award className="h-4 w-4 text-yellow-500" /> {/* Yellow for ranks/awards */}
+        <span>Supervisory Level</span>
+      </div>
+    </th>
+
+    <th scope="col" className="px-6 py-4 font-semibold">
+      <div className="flex items-center gap-2">
+        <UserCheck className="h-4 w-4 text-green-600" /> {/* Green for status/approval */}
+        <span>Status</span>
+      </div>
+    </th>
+
+    <th scope="col" className="px-6 py-4 font-semibold text-right">
+      <span>Actions</span>
+    </th>
+  </tr>
+</thead>
+
+        <tbody className="divide-y divide-gray-100">
+          {currentItems.map((position, index) => (
+            <motion.tr
+              key={position.id}
+              className="bg-white hover:bg-gray-50 transition-all duration-200"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: index * 0.05 }}
+            >
+              <td className="px-6 py-4">
+                <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full text-sm font-semibold text-gray-600">
+                  {indexOfFirstItem + index + 1}
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <div className="max-w-xs">
+                  <div className="font-medium text-gray-900 truncate" title={position.title}>
+                    {position.title}
+                  </div>
+                  {position.company && (
+                    <div className="text-xs text-gray-500 mt-1 truncate" title={position.company.name}>
+                      {position.company.name}
+                    </div>
+                  )}
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                {position.department ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700 truncate max-w-32" title={position.department.name}>
+                      {position.department.name}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-gray-400 text-sm">—</span>
+                )}
+              </td>
+              <td className="px-6 py-4">
+                {position.supervisoryLevel ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                    <span className="text-sm text-gray-700 truncate max-w-32" title={position.supervisoryLevel.level}>
+                      {position.supervisoryLevel.level}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-gray-400 text-sm">—</span>
+                )}
+              </td>
+              <td className="px-6 py-4">
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                  position.isActive 
+                    ? "bg-green-100 text-green-800 border border-green-200" 
+                    : "bg-red-100 text-red-800 border border-red-200"
+                }`}>
+                  {position.isActive ? "Active" : "Inactive"}
+                </span>
+              </td>
+              <td className="px-4 py-2">
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => handleEditClick(position)}
+                    className="flex items-center px-2 py-1.5 text-[11px] font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition duration-150 shadow"
+                    title="Edit Position"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline ml-1">Edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(position.id)}
+                    className="flex items-center px-2 py-1.5 text-[11px] font-medium rounded bg-red-600 text-white hover:bg-red-700 transition duration-150 shadow"
+                    title="Delete Position"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline ml-1">Delete</span>
+                  </button>
+                </div>
+              </td>
+            </motion.tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  {/* Pagination Controls */}
+  {sortedAndFilteredPositions.length > 0 && totalPages > 1 && (
+    <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-t border-gray-200">
+      <div className="flex items-center text-sm text-gray-700 font-medium">
+        <span className="text-gray-600">
+          Showing <span className="font-semibold text-gray-900">{indexOfFirstItem + 1}</span> to{" "}
+          <span className="font-semibold text-gray-900">{Math.min(indexOfLastItem, sortedAndFilteredPositions.length)}</span> of{" "}
+          <span className="font-semibold text-gray-900">{sortedAndFilteredPositions.length}</span> positions
+        </span>
+        <select
+          value={itemsPerPage}
+          onChange={(e) => {
+            setItemsPerPage(Number(e.target.value))
+            setCurrentPage(1)
+          }}
+          className="ml-4 border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+        >
+          <option value={5}>5 per page</option>
+          <option value={10}>10 per page</option>
+          <option value={20}>20 per page</option>
+          <option value={50}>50 per page</option>
+        </select>
+      </div>
+
+      <div className="flex items-center space-x-1">
+        <button
+          onClick={() => setCurrentPage(1)}
+          disabled={currentPage === 1}
+          className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+          title="First page"
+        >
+          <ChevronsLeft className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => setCurrentPage(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+          title="Previous page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+          let pageNum
+          if (totalPages <= 5) {
+            pageNum = i + 1
+          } else if (currentPage <= 3) {
+            pageNum = i + 1
+          } else if (currentPage >= totalPages - 2) {
+            pageNum = totalPages - 4 + i
+          } else {
+            pageNum = currentPage - 2 + i
+          }
+          return (
+            <button
+              key={pageNum}
+              onClick={() => setCurrentPage(pageNum)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-sm ${
+                pageNum === currentPage
+                  ? "bg-emerald-500 text-white border border-emerald-500 shadow-emerald-200"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              {pageNum}
+            </button>
+          )
+        })}
+
+        <button
+          onClick={() => setCurrentPage(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+          title="Next page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={() => setCurrentPage(totalPages)}
+          disabled={currentPage === totalPages}
+          className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+          title="Last page"
+        >
+          <ChevronsRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )}
+</div>
+
+
       </div>
 
       {renderEditModal()}

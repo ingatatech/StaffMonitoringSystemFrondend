@@ -1,5 +1,3 @@
-
-// @ts-nocheck
 "use client"
 
 import React from "react"
@@ -12,7 +10,7 @@ import { motion } from "framer-motion"
 import axios from "axios"
 import { createPosition, clearPositionError } from "../../../../Redux/Slices/PositionSlices"
 import type { AppDispatch, RootState } from "../../../../Redux/store"
-import { ArrowLeft, Save, Building, Users, Briefcase, Award } from "lucide-react"
+import { ArrowLeft, Save, Building, Users, Briefcase, Award, UserCheck } from "lucide-react"
 
 // Interfaces for API responses
 interface APIResponse<T> {
@@ -60,20 +58,32 @@ interface ICompany {
   }
 }
 
+interface IAvailableSupervisor {
+  id: number
+  title: string
+  company: string | null
+  department: string | null
+  supervisoryLevel: string | null
+}
+
 // Form values interface
 interface FormValues {
   title: string
+  description: string
   company_id: string
   department_id: string
   supervisory_level_id: string
+  direct_supervisor_id: string
 }
 
 // Validation schema
 const validationSchema = Yup.object().shape({
   title: Yup.string().required("Position title is required"),
+  description: Yup.string().optional(),
   company_id: Yup.string().required("Company is required"),
   department_id: Yup.string().required("Department is required"),
   supervisory_level_id: Yup.string().required("Supervisory level is required"),
+  direct_supervisor_id: Yup.string().optional(),
 })
 
 const CreatePositionPage: React.FC = () => {
@@ -85,12 +95,16 @@ const CreatePositionPage: React.FC = () => {
   const [companies, setCompanies] = useState<ICompany[]>([])
   const [departments, setDepartments] = useState<IDepartment[]>([])
   const [supervisoryLevels, setSupervisoryLevels] = useState<ISupervisoryLevel[]>([])
+  const [availableSupervisors, setAvailableSupervisors] = useState<IAvailableSupervisor[]>([])
   const [loadingData, setLoadingData] = useState(false)
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false)
   const [formValues, setFormValues] = useState<FormValues>({
     title: "",
+    description: "",
     company_id: "",
     department_id: "",
     supervisory_level_id: "",
+    direct_supervisor_id: "",
   })
 
   // Calculate form completion percentage
@@ -115,6 +129,33 @@ const CreatePositionPage: React.FC = () => {
       dispatch(clearPositionError())
     }
   }, [error, dispatch])
+
+  // Fetch available supervisors
+  const fetchAvailableSupervisors = async () => {
+    if (!user?.organization?.id) return
+
+    setLoadingSupervisors(true)
+    try {
+      const token = localStorage.getItem("token")
+      const organizationId = user.organization.id
+
+      const response = await axios.get<APIResponse<IAvailableSupervisor[]>>(
+        `${import.meta.env.VITE_BASE_URL}/v1/position/${organizationId}/supervisors`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (response.data.success && response.data.data) {
+        setAvailableSupervisors(response.data.data)
+      }
+    } catch (error) {
+    } finally {
+      setLoadingSupervisors(false)
+    }
+  }
 
   // Fetch companies, departments and supervisory levels
   useEffect(() => {
@@ -169,8 +210,10 @@ const CreatePositionPage: React.FC = () => {
         if (supervisoryLevelsResponse.data.success && supervisoryLevelsResponse.data.data) {
           setSupervisoryLevels(supervisoryLevelsResponse.data.data)
         }
+
+        // Fetch available supervisors
+        await fetchAvailableSupervisors()
       } catch (error) {
-        console.error("Error fetching data:", error)
       } finally {
         setLoadingData(false)
       }
@@ -223,9 +266,11 @@ const CreatePositionPage: React.FC = () => {
               onSubmit={async (values, { resetForm }) => {
                 const positionData = {
                   title: values.title,
+                  description: values.description,
                   company_id: Number(values.company_id),
                   department_id: Number(values.department_id),
                   supervisory_level_id: Number(values.supervisory_level_id),
+                  direct_supervisor_id: values.direct_supervisor_id ? Number(values.direct_supervisor_id) : undefined,
                 }
 
                 try {
@@ -266,6 +311,26 @@ const CreatePositionPage: React.FC = () => {
                         }}
                       />
                       <ErrorMessage name="title" component="div" className="mt-1 text-sm text-red" />
+                    </div>
+
+                    {/* Position Description */}
+                    <div className="md:col-span-2">
+                      <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                        <Briefcase className="inline h-4 w-4 mr-1" />
+                        Description (Optional)
+                      </label>
+                      <Field
+                        name="description"
+                        as="textarea"
+                        rows="3"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        placeholder="Brief description of the position responsibilities and requirements"
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                          handleChange(e)
+                          setFormValues({ ...formValues, description: e.target.value })
+                        }}
+                      />
+                      <ErrorMessage name="description" component="div" className="mt-1 text-sm text-red" />
                     </div>
 
                     {/* Company Selection */}
@@ -330,7 +395,7 @@ const CreatePositionPage: React.FC = () => {
                     </div>
 
                     {/* Supervisory Level Selection */}
-                    <div className="md:col-span-2">
+                    <div>
                       <label htmlFor="supervisory_level_id" className="block text-sm font-medium text-gray-700">
                         <Award className="inline h-4 w-4 mr-1" />
                         Supervisory Level <span className="text-red">*</span>
@@ -355,7 +420,41 @@ const CreatePositionPage: React.FC = () => {
                       </Field>
                       <ErrorMessage name="supervisory_level_id" component="div" className="mt-1 text-sm text-red" />
                     </div>
+
+                    {/* Direct Supervisor Selection */}
+                    <div>
+                      <label htmlFor="direct_supervisor_id" className="block text-sm font-medium text-gray-700">
+                        <UserCheck className="inline h-4 w-4 mr-1" />
+                        Direct Supervisor (Optional)
+                      </label>
+                      <Field
+                        as="select"
+                        name="direct_supervisor_id"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                          handleChange(e)
+                          setFormValues({ ...formValues, direct_supervisor_id: e.target.value })
+                        }}
+                      >
+                        <option value="">None (Top Level Position)</option>
+                        {loadingSupervisors ? (
+                          <option disabled>Loading supervisors...</option>
+                        ) : (
+                          availableSupervisors.map((supervisor) => (
+                            <option key={supervisor.id} value={supervisor.id}>
+                              {supervisor.title}
+                            </option>
+                          ))
+                        )}
+                      </Field>
+                      <ErrorMessage name="direct_supervisor_id" component="div" className="mt-1 text-sm text-red" />
+                      <p className="mt-1 text-sm text-gray-500">
+                        Select an existing position that will serve as the direct supervisor for this position. 
+                        Leave empty if this is a top-level position with no supervisor.
+                      </p>
+                    </div>
                   </div>
+
 
                   {/* Submit Button */}
                   <div className="flex justify-end">

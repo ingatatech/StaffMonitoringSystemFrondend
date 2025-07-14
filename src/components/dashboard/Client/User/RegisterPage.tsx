@@ -101,6 +101,17 @@ const RegisterPage: React.FC = () => {
     )
   }, [positions, selectedSubsidiary, hasSubsidiaries])
 
+  // Helper function to get the correct company ID
+  const getCompanyId = useCallback(() => {
+    if (hasSubsidiaries && organizationStructure?.subsidiaries?.length > 0) {
+      // If has subsidiaries, return the first subsidiary's ID as default
+      return organizationStructure.subsidiaries[0].id
+    } else {
+      // If no subsidiaries, return the organization ID (which should be used as company ID)
+      return user?.organization?.id || organizationStructure?.id || 1
+    }
+  }, [hasSubsidiaries, organizationStructure, user])
+
   useEffect(() => {
     // Fetch holding companies, which now returns the complete organization structure
     dispatch(fetchHoldingCompanies())
@@ -201,7 +212,7 @@ const RegisterPage: React.FC = () => {
   }
 
   return (
-    <div className="h-[100vh] mt-10 from-purple-100 via-white to-purple-50 flex items-center justify-center py-2 px-4 sm:px-6 lg:px-8">
+    <div className="h-[100vh] mt-10 from-purple-100 via-white to-purple-50 flex items-center justify-center py-2 px-4 sm:px-6 lg:px-8 pt-[230px]">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -242,20 +253,21 @@ const RegisterPage: React.FC = () => {
               position_id: Number(values.position_id),
             }
 
-            // FIXED: Handle company assignment based on subsidiaries
             if (hasSubsidiaries && values.company_id) {
-              // If organization has subsidiaries and a company is selected, use the selected company
               userData.company_id = Number(values.company_id)
             } else if (!hasSubsidiaries) {
-              // If organization doesn't have subsidiaries, use organization ID as company ID
-              userData.company_id = user?.organization?.id || organizationStructure?.id
+              if (organizationStructure?.subsidiaries?.length > 0) {
+                userData.company_id = organizationStructure.subsidiaries[0].id
+              } else {
+                userData.company_id = user?.organization?.id || organizationStructure?.id || 1
+              }
+            } else {
+              userData.company_id = getCompanyId()
             }
-            // If hasSubsidiaries is true but no company_id is selected, company will be null (validation should prevent this)
 
             dispatch(registerUser(userData))
               .unwrap()
               .then(() => {
-                // Don't reset the form here, let the success message handle it
               })
               .catch(() => {})
               .finally(() => {

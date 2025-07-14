@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client"
 
 import { useEffect, useState } from "react"
@@ -16,7 +17,6 @@ import withAdminAuth from "../../../Auth/withAdminAuth"
 import OverAllTaskList from "./OverAllTaskList"
 import TaskReviewModal from "./TaskReviewModal"
 import OverAllFilterSection from "./OverAllFilterSection"
-import Pagination from "../Tasks/Pagination"
 import { useNavigate } from "react-router-dom"
 import TaskReportComponent from "./TaskReportComponent"
 import React from "react"
@@ -32,6 +32,8 @@ const TeamTasksDashboard = () => {
   const user = useAppSelector((state) => state.login.user)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+    const [summaryLoading, setSummaryLoading] = useState(false)
+  
   const navigate = useNavigate()
 
   // Check if any filters are active
@@ -44,18 +46,21 @@ const TeamTasksDashboard = () => {
     filters.company
   )
 
-  useEffect(() => {
-    const organizationId = user?.organization?.id
-    if (organizationId) {
-      dispatch(
-        fetchAllDailyTasks({
-          organizationId,
-          page: pagination.current_page,
-          filters,
-        }),
-      )
-    }
-  }, [dispatch, user, pagination.current_page, filters])
+useEffect(() => {
+  const organizationId = user?.organization?.id
+  if (organizationId) {
+    setSummaryLoading(true)
+    dispatch(
+      fetchAllDailyTasks({
+        organizationId,
+        page: pagination.current_page,
+        filters,
+      }),
+    ).finally(() => {
+      setSummaryLoading(false)
+    })
+  }
+}, [dispatch, user, pagination.current_page, filters])
 
   const handlePageChange = (page: number) => {
     const organizationId = user?.organization?.id
@@ -107,7 +112,10 @@ const TeamTasksDashboard = () => {
           <p className="text-xl font-bold text-gray-600">{user?.organization?.name}</p>
         </div>
       </div>
-
+  <TaskReportComponent 
+    teamTasks={allDailyTasks} 
+    loading={summaryLoading || loading} 
+  />
       {/* Filter Section */}
       <div data-filter-section>
         <OverAllFilterSection filters={filters} onFilterChange={handleFilterChange} />
@@ -138,10 +146,7 @@ const TeamTasksDashboard = () => {
       ) : (
         <div className="space-y-6">
           {/* Task Report Component */}
-          {!loading && allDailyTasks && allDailyTasks.length > 0 && (
-            <TaskReportComponent teamTasks={allDailyTasks} />
-          )}
-
+  
           <OverAllTaskList
             teamTasks={allDailyTasks}
             loading={loading}
@@ -151,15 +156,7 @@ const TeamTasksDashboard = () => {
             onOpenFilters={handleOpenFilters}
           />
 
-          {/* Pagination */}
-          {allDailyTasks.length > 0 && (
-            <Pagination
-              currentPage={pagination.current_page}
-              totalPages={pagination.total_pages}
-              onPageChange={handlePageChange}
-              totalItems={pagination.total_items}
-            />
-          )}
+
         </div>
       )}
 

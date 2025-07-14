@@ -68,7 +68,7 @@ const TeamDetailsModal: React.FC<TeamDetailsModalProps> = ({ team, isOpen, onClo
               <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
                 <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-gray-800">
                   <Info className="h-5 w-5 text-green" />
-                  About this team
+                  About this teamdfdfdfsf
                 </h3>
                 <p className="text-gray-600 leading-relaxed">
                   {team.description || "No description provided for this team."}

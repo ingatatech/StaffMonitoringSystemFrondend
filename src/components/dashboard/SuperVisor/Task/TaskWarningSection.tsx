@@ -47,7 +47,6 @@ const TaskWarningSection: React.FC<TaskWarningSectionProps> = ({
               <div className="space-y-2">
                 <p className="font-medium">You can filter by:</p>
                 <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>Task status (Pending, Approved, Rejected)</li>
                   <li>Team member name</li>
                   <li>Date range</li>
                   <li>Search by task title, description, or project</li>

@@ -129,7 +129,6 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       setEditFiles(null)
       toast.success("Task updated successfully!")
     } catch (error) {
-      console.error("Error updating task:", error)
     }
   }
 
@@ -161,7 +160,6 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       setReworkFiles(null)
       toast.success("Task reworked successfully!")
     } catch (error) {
-      console.error("Error reworking task:", error)
     }
   }
 
@@ -171,7 +169,6 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       await dispatch(updateTaskStatus({ taskId: task.id, status: newStatus })).unwrap()
       toast.success("Task status updated successfully!")
     } catch (error) {
-      console.error("Error updating task status:", error)
     }
   }
 
@@ -185,7 +182,6 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({
       setNewComment("")
       toast.success("Comment added successfully!")
     } catch (error) {
-      console.error("Error adding comment:", error)
     }
   }
 

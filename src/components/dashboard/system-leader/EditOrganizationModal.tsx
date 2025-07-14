@@ -265,7 +265,6 @@ const EditOrganizationModal = ({ isOpen, onClose, organization }: EditOrganizati
       toast.success("Organization updated successfully")
       onClose()
     } catch (error) {
-      console.error("Failed to update organization:", error)
       toast.error("Failed to update organization")
     }
   }

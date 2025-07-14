@@ -45,12 +45,10 @@ export const fetchTaskTypes = createAsyncThunk(
   "taskTypes/fetchTaskTypes",
   async (_, { rejectWithValue, getState }) => {
     try {
-      console.log("📋 [TASK TYPES] Fetching task types")
       const state = getState() as RootState
       const organizationId = state.login.user?.organization?.id
       const token = localStorage.getItem("token")
 
-      console.log("🏢 [TASK TYPES] Organization ID:", organizationId)
 
       if (!organizationId) {
         throw new Error("Organization not found")
@@ -62,10 +60,8 @@ export const fetchTaskTypes = createAsyncThunk(
         },
       })
 
-      console.log("✅ [TASK TYPES] Task types fetched successfully")
       return response.data.data || []
     } catch (error: any) {
-      console.error("❌ [TASK TYPES] Failed to fetch task types:", error)
       const errorMessage = error.response?.data?.message || "Failed to fetch task types"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
@@ -78,7 +74,6 @@ export const createTaskType = createAsyncThunk(
   "taskTypes/createTaskType",
   async (taskTypeData: { name: string }, { rejectWithValue, getState }) => {
     try {
-      console.log("➕ [TASK TYPES] Creating task type:", taskTypeData)
       const state = getState() as RootState
       const organizationId = state.login.user?.organization?.id
       const token = localStorage.getItem("token")
@@ -94,11 +89,9 @@ export const createTaskType = createAsyncThunk(
         },
       })
 
-      console.log("✅ [TASK TYPES] Task type created successfully")
       showSuccessToast("Task type created successfully!")
       return response.data.data
     } catch (error: any) {
-      console.error("❌ [TASK TYPES] Failed to create task type:", error)
       const errorMessage = error.response?.data?.message || "Failed to create task type"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
@@ -111,7 +104,6 @@ export const updateTaskType = createAsyncThunk(
   "taskTypes/updateTaskType",
   async ({ taskTypeId, taskTypeData }: { taskTypeId: number; taskTypeData: { name: string } }, { rejectWithValue }) => {
     try {
-      console.log("✏️ [TASK TYPES] Updating task type:", taskTypeId, taskTypeData)
       const token = localStorage.getItem("token")
 
       const response = await axios.put(`${apiUrl}/task-types/${taskTypeId}`, taskTypeData, {
@@ -121,11 +113,9 @@ export const updateTaskType = createAsyncThunk(
         },
       })
 
-      console.log("✅ [TASK TYPES] Task type updated successfully")
       showSuccessToast("Task type updated successfully!")
       return response.data.data
     } catch (error: any) {
-      console.error("❌ [TASK TYPES] Failed to update task type:", error)
       const errorMessage = error.response?.data?.message || "Failed to update task type"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
@@ -138,7 +128,6 @@ export const deleteTaskType = createAsyncThunk(
   "taskTypes/deleteTaskType",
   async (taskTypeId: number, { rejectWithValue }) => {
     try {
-      console.log("🗑️ [TASK TYPES] Deleting task type:", taskTypeId)
       const token = localStorage.getItem("token")
 
       await axios.delete(`${apiUrl}/task-types/${taskTypeId}`, {
@@ -147,11 +136,9 @@ export const deleteTaskType = createAsyncThunk(
         },
       })
 
-      console.log("✅ [TASK TYPES] Task type deleted successfully")
       showSuccessToast("Task type deleted successfully!")
       return taskTypeId
     } catch (error: any) {
-      console.error("❌ [TASK TYPES] Failed to delete task type:", error)
       const errorMessage = error.response?.data?.message || "Failed to delete task type"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
@@ -164,7 +151,6 @@ export const getTaskTypeById = createAsyncThunk(
   "taskTypes/getTaskTypeById",
   async (taskTypeId: number, { rejectWithValue }) => {
     try {
-      console.log("🔍 [TASK TYPES] Fetching task type by ID:", taskTypeId)
       const token = localStorage.getItem("token")
 
       const response = await axios.get(`${apiUrl}/task-types/${taskTypeId}`, {
@@ -173,10 +159,8 @@ export const getTaskTypeById = createAsyncThunk(
         },
       })
 
-      console.log("✅ [TASK TYPES] Task type fetched by ID successfully")
       return response.data.data
     } catch (error: any) {
-      console.error("❌ [TASK TYPES] Failed to fetch task type by ID:", error)
       const errorMessage = error.response?.data?.message || "Failed to fetch task type"
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)

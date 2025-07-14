@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 "use client"
 
@@ -7,7 +6,7 @@ import { useAppSelector, useAppDispatch } from "../../../Redux/hooks"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../ui/tabs"
 
 import DashboardHeader from "./components/DashboardHeader"
-import SummaryCards from "./components/SummaryCards"
+import SummaryCards from "./components/SummaryCards" 
 import OverviewTab from "./components/tabs/OverviewTab"
 import MembersTab from "./components/tabs/MembersTab"
 import Loader from "../../ui/Loader"
@@ -47,15 +46,15 @@ const SupervisorDashboard = () => {
     }
   }, [dispatch, selectedMember, timeRange])
 
-  const handleTimeRangeChange = (range:any) => {
+  const handleTimeRangeChange = (range: any) => {
     dispatch(setTimeRange(range))
   }
 
-  const handleTeamChange = (teamId:any) => {
+  const handleTeamChange = (teamId: any) => {
     dispatch(setSelectedTeam(teamId))
   }
 
-  const handleMemberChange = (memberId:any) => {
+  const handleMemberChange = (memberId: any) => {
     dispatch(setSelectedMember(memberId))
   }
 
@@ -85,7 +84,10 @@ const SupervisorDashboard = () => {
       <DashboardHeader timeRange={timeRange} setTimeRange={handleTimeRangeChange} handleRefresh={handleRefresh} />
 
       {dashboardData ? (
-        <SummaryCards summary={dashboardData.summary} />
+        <SummaryCards 
+          summary={dashboardData.summary} 
+          loading={loading.dashboard} 
+        />
       ) : null}
 
       {/* Main Content Tabs */}
@@ -104,16 +106,18 @@ const SupervisorDashboard = () => {
 
         {/* Members Tab */}
         <TabsContent value="members" className="space-y-6">
-          <MembersTab
-            teamPerformance={teamPerformance}
-            selectedTeam={selectedTeam}
-            selectedTeamData={selectedTeamData}
-            selectedMember={selectedMember}
-            memberPerformance={memberPerformance}
-            handleTeamChange={handleTeamChange}
-            handleMemberChange={handleMemberChange}
-            isLoading={loading.member}
-          />
+          <TabsContent value="members" className="space-y-6">
+            <MembersTab
+              teamPerformance={teamPerformance}
+              selectedTeam={selectedTeam}
+              selectedTeamData={selectedTeamData}
+              selectedMember={selectedMember}
+              memberPerformance={memberPerformance}
+              handleTeamChange={handleTeamChange}
+              handleMemberChange={handleMemberChange}
+              isLoading={loading.member}
+            />
+          </TabsContent>
         </TabsContent>
       </Tabs>
     </div>
@@ -121,4 +125,3 @@ const SupervisorDashboard = () => {
 }
 
 export default SupervisorDashboard
-

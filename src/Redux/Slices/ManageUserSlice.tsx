@@ -94,7 +94,7 @@ export const fetchUsers = createAsyncThunk(
     try {
       const token = localStorage.getItem("token"); // Get token from local storage
       const response = await axios.get(
-        `${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users`,
+        `${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users?getAll=true`,
         {
           headers: {
             Authorization: `Bearer ${token}`, // Include token in headers

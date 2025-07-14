@@ -1,0 +1,21 @@
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Disallow admin areas (optional - protect sensitive routes)
+Disallow: /admin/
+Disallow: /overall/
+Disallow: /super-visor/
+Disallow: /employeeDashboard/
+Disallow: /system-leader/
+
+# Allow home page and public routes
+Allow: /$
+Allow: /login
+Allow: /register
+
+# Sitemap location
+Sitemap: https://ingata-spro.com/sitemap.xml
+
+# Crawl-delay (optional, helps prevent server overload)
+Crawl-delay: 1

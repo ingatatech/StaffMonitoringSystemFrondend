@@ -41,6 +41,8 @@ interface CompaniesState {
   success: boolean
   successMessage: string
   isEditing: boolean
+  isUpdating: boolean // Separate loading state for updates
+  isSilentFetching: boolean // For silent refresh after update
 }
 
 // Initial state
@@ -59,6 +61,8 @@ const initialState: CompaniesState = {
   success: false,
   successMessage: "",
   isEditing: false,
+  isUpdating: false,
+  isSilentFetching: false,
 }
 
 // API URL
@@ -68,20 +72,20 @@ const API_URL = `${import.meta.env.VITE_BASE_URL}/v1/companies`
 export const fetchCompanies = createAsyncThunk(
   "companies/fetchCompanies",
   async (
-    { page = 1, limit = 10, search = "" }: { page?: number; limit?: number; search?: string },
-    { rejectWithValue,getState },
+    { page = 1, limit = 10, search = "", silent = false }: { page?: number; limit?: number; search?: string; silent?: boolean },
+    { rejectWithValue, getState },
   ) => {
     try {
       const queryParams = new URLSearchParams()
       queryParams.append("page", page.toString())
       queryParams.append("limit", limit.toString())
-            const state = getState() as RootState
-            const organizationId = state.login.user?.organization?.id
-            
-            if (!organizationId) {
-              throw new Error("Organization ID is missing")
-            }
-      
+      const state = getState() as RootState
+      const organizationId = state.login.user?.organization?.id
+
+      if (!organizationId) {
+        throw new Error("Organization ID is missing")
+      }
+
       if (search) {
         queryParams.append("search", search)
       }
@@ -92,10 +96,12 @@ export const fetchCompanies = createAsyncThunk(
           Authorization: `Bearer ${token}`,
         },
       })
-      return response.data.data
+      return { data: response.data.data, silent }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Failed to fetch companies"
-      showErrorToast(errorMessage)
+      if (!silent) {
+        showErrorToast(errorMessage)
+      }
       return rejectWithValue(errorMessage)
     }
   },
@@ -105,10 +111,10 @@ export const createCompany = createAsyncThunk(
   "companies/createCompany",
   async (companyData: { name: string; tin?: string; group_id?: number }, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("token") 
+      const token = localStorage.getItem("token")
       const response = await axios.post(API_URL, companyData, {
         headers: {
-          Authorization: `Bearer ${token}`, 
+          Authorization: `Bearer ${token}`,
         },
       })
       showSuccessToast("Company created successfully")
@@ -125,16 +131,22 @@ export const updateCompany = createAsyncThunk(
   "companies/updateCompany",
   async (
     { id, companyData }: { id: number; companyData: { name?: string; tin?: string; group_id?: number } },
-    { rejectWithValue },
+    { rejectWithValue, dispatch },
   ) => {
     try {
-      const token = localStorage.getItem("token") 
+      const token = localStorage.getItem("token")
       const response = await axios.put(`${API_URL}/${id}`, companyData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
       showSuccessToast("Company updated successfully")
+      
+      // Trigger silent refresh after successful update
+      setTimeout(() => {
+        dispatch(fetchCompanies({ page: 1, limit: 10, silent: true }))
+      }, 100)
+      
       return response.data.data.company
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Failed to update company"
@@ -146,7 +158,7 @@ export const updateCompany = createAsyncThunk(
 
 export const deleteCompany = createAsyncThunk("companies/deleteCompany", async (id: number, { rejectWithValue }) => {
   try {
-    const token = localStorage.getItem("token") 
+    const token = localStorage.getItem("token")
     await axios.delete(`${API_URL}/${id}`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -165,7 +177,7 @@ export const getCompanyUsers = createAsyncThunk(
   "companies/getCompanyUsers",
   async (companyId: number, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("token") 
+      const token = localStorage.getItem("token")
       const response = await axios.get(`${API_URL}/${companyId}/users`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -215,29 +227,44 @@ const companiesSlice = createSlice({
   extraReducers: (builder) => {
     builder
       // Fetch companies
-      .addCase(fetchCompanies.pending, (state) => {
-        state.loading = true
+      .addCase(fetchCompanies.pending, (state, action) => {
+        const { silent } = action.meta.arg
+        if (silent) {
+          state.isSilentFetching = true
+        } else {
+          state.loading = true
+        }
         state.error = null
       })
       .addCase(fetchCompanies.fulfilled, (state, action) => {
-        state.loading = false
-        state.companies = action.payload.companies || []
-        state.filteredCompanies = action.payload.companies || []
-        state.pagination = action.payload.pagination
+        const { silent } = action.payload
+        if (silent) {
+          state.isSilentFetching = false
+        } else {
+          state.loading = false
+        }
+        state.companies = action.payload.data.companies || []
+        state.filteredCompanies = action.payload.data.companies || []
+        state.pagination = action.payload.data.pagination
       })
       .addCase(fetchCompanies.rejected, (state, action) => {
-        state.loading = false
+        const { silent } = action.meta.arg
+        if (silent) {
+          state.isSilentFetching = false
+        } else {
+          state.loading = false
+        }
         state.error = action.payload as string
       })
 
       // Create company
       .addCase(createCompany.pending, (state) => {
-        state.loading = true
+        state.isUpdating = true
         state.error = null
         state.isEditing = true
       })
       .addCase(createCompany.fulfilled, (state, action) => {
-        state.loading = false
+        state.isUpdating = false
         state.companies.unshift(action.payload)
         state.filteredCompanies = [...state.companies]
         state.success = true
@@ -245,31 +272,36 @@ const companiesSlice = createSlice({
         state.isEditing = false
       })
       .addCase(createCompany.rejected, (state, action) => {
-        state.loading = false
+        state.isUpdating = false
         state.error = action.payload as string
         state.isEditing = false
       })
 
       // Update company
       .addCase(updateCompany.pending, (state) => {
-        state.loading = true
+        state.isUpdating = true
         state.error = null
         state.isEditing = true
       })
       .addCase(updateCompany.fulfilled, (state, action) => {
-        state.loading = false
-        const index = state.companies.findIndex((company) => company.id === action.payload.id)
+        state.isUpdating = false
+        state.isEditing = false
+
+        // Update the specific company in the state immediately
+        const index = state.companies.findIndex(company => company.id === action.payload.id)
         if (index !== -1) {
           state.companies[index] = action.payload
         }
-        state.filteredCompanies = [...state.companies]
-        state.selectedCompany = null
+
+        // Also update filteredCompanies
+        state.filteredCompanies = state.companies
+
         state.success = true
         state.successMessage = "Company updated successfully"
-        state.isEditing = false
+        state.selectedCompany = null
       })
       .addCase(updateCompany.rejected, (state, action) => {
-        state.loading = false
+        state.isUpdating = false
         state.error = action.payload as string
         state.isEditing = false
       })
@@ -311,4 +343,3 @@ export const { clearCompanyError, clearCompanySuccess, setSelectedCompany, clear
   companiesSlice.actions
 
 export default companiesSlice.reducer
-

@@ -278,7 +278,6 @@ const TeamPage: React.FC = () => {
             {eligibleSupervisors.map((supervisor) => (
               <option key={supervisor.id} value={supervisor.id}>
                 {supervisor.username}
-                {supervisor.lastName} {supervisor.supervisoryLevel?.level || "No Level"}
               </option>
             ))}
           </select>

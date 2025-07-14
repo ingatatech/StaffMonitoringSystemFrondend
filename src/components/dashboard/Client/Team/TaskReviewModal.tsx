@@ -10,6 +10,7 @@ import { reviewTask, fetchAllDailyTasks } from "../../../../Redux/Slices/TaskRev
 import { CheckCircle, XCircle, Clock, X, MessageSquare, Clipboard, FileCheck, AlertCircle, Calendar, User, Building2, Target } from "lucide-react"
 import { Badge } from "../../../ui/Badge"
 import { Textarea } from "../../../ui/textarea"
+import RichTextRenderer from "./RichTextRenderer"
 
 interface TaskReviewModalProps {
   isOpen: boolean
@@ -25,40 +26,57 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ isOpen, onClose }) =>
   const filters = useAppSelector((state) => state.taskReview.filters)
   const pagination = useAppSelector((state) => state.taskReview.pagination)
 
- const handleReview = async (status: "approved" | "rejected") => {
-  if (!selectedTask) return
+  const handleReview = async (status: "approved" | "rejected") => {
+    if (!selectedTask) return
 
-  setSubmittingAction(status)
-  try {
-    await dispatch(
-      reviewTask({
-        taskId: selectedTask.id,
-        status,
-        comment: comment.trim() || undefined,
-      }),
-    ).unwrap()
-    if (currentUser?.organization?.id) {
-      dispatch(
-        fetchAllDailyTasks({
-          organizationId: currentUser.organization.id,
-          page: pagination.current_page,
-          filters,
-        })
-      )
+    setSubmittingAction(status)
+    try {
+      await dispatch(
+        reviewTask({
+          taskId: selectedTask.id,
+          status,
+          comment: comment.trim() || undefined,
+        }),
+      ).unwrap()
+      if (currentUser?.organization?.id) {
+        dispatch(
+          fetchAllDailyTasks({
+            organizationId: currentUser.organization.id,
+            page: pagination.current_page,
+            filters,
+          })
+        )
+      }
+      onClose()
+      setComment("")
+    } catch (error) {
+      console.error("Review failed:", error)
+    } finally {
+      setSubmittingAction(null)
     }
-    onClose()
-    setComment("")
-  } catch (error) {
-    console.error("Failed to review task:", error)
-  } finally {
-    setSubmittingAction(null)
   }
-}
+
   const handleClose = () => {
     dispatch(clearSelectedTask())
     onClose()
     setComment("")
     setSubmittingAction(null)
+  }
+
+  // Helper function to get company name (handles both string and object formats)
+  const getCompanyName = () => {
+    if (!selectedTask?.company) return "Not specified"
+    return typeof selectedTask.company === 'string' 
+      ? selectedTask.company 
+      : selectedTask.company.name || "Not specified"
+  }
+
+  // Helper function to get department name (handles both string and object formats)
+  const getDepartmentName = () => {
+    if (!selectedTask?.department) return "Not specified"
+    return typeof selectedTask.department === 'string'
+      ? selectedTask.department
+      : selectedTask.department.name || "Not specified"
   }
 
   // Helper function for review status badge
@@ -159,7 +177,11 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ isOpen, onClose }) =>
                       <div className="flex items-center space-x-6 text-sm text-gray-600">
                         <div className="flex items-center space-x-2">
                           <Building2 className="h-4 w-4 text-gray-400" />
-                          <span className="font-medium">{selectedTask.department || "Not specified"}</span>
+                          <span className="font-medium">{getDepartmentName()}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Building2 className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium">{getCompanyName()}</span>
                         </div>
                         {selectedTask.created_at && (
                           <div className="flex items-center space-x-2">
@@ -177,7 +199,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ isOpen, onClose }) =>
                           <Clipboard className="mr-3 h-5 w-5 text-blue-600" />
                           Description
                         </h3>
-                        <p className="text-gray-700 leading-relaxed">{selectedTask.description}</p>
+                        <RichTextRenderer content={selectedTask.description} />
                       </div>
                     </div>
 
@@ -199,7 +221,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ isOpen, onClose }) =>
                             <User className="mr-3 h-5 w-5 text-green-600" />
                             Contribution
                           </h3>
-                          <p className="text-gray-700 leading-relaxed">{selectedTask.contribution}</p>
+                          <RichTextRenderer content={selectedTask.contribution} />
                         </div>
                       )}
 
@@ -209,7 +231,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ isOpen, onClose }) =>
                             <CheckCircle className="mr-3 h-5 w-5 text-orange-600" />
                             Achieved Deliverables
                           </h3>
-                          <p className="text-gray-700 leading-relaxed">{selectedTask.achieved_deliverables}</p>
+                          <RichTextRenderer content={selectedTask.achieved_deliverables} />
                         </div>
                       )}
                     </div>
@@ -275,7 +297,7 @@ const TaskReviewModal: React.FC<TaskReviewModalProps> = ({ isOpen, onClose }) =>
                               <div className="space-y-2">
                                 {selectedTask.comment.map((comment, index) => (
                                   <div key={index} className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700">
-                                    {comment}
+                                    {typeof comment === 'object' ? comment.text || JSON.stringify(comment) : comment}
                                   </div>
                                 ))}
                               </div>

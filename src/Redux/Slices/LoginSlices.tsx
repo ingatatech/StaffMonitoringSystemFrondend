@@ -50,7 +50,7 @@ interface LoginState {
 const initialState: LoginState = {
   user: JSON.parse(localStorage.getItem("user") || "null"),
   token: localStorage.getItem("token"),
-  loading: false,
+  loading: false,  
   error: null,
   isAuthenticated: !!localStorage.getItem("token"),
   isFirstLogin: false,
@@ -101,7 +101,7 @@ const getRedirectPath = (role: string) => {
     case "supervisor":
       return "/super-visor"
     case "employee":
-      return "/employeeDashboard"
+      return "/employee-dashboard"
     case "system_leader":
       return "/system-leader"
     default:
@@ -116,6 +116,8 @@ const loginSlice = createSlice({
     logout: (state) => {
       state.user = null
       state.token = null
+      state.loading = false // Reset loading on logout
+      state.error = null
       state.isAuthenticated = false
       state.isFirstLogin = false
       state.showFirstLoginModal = false
@@ -135,6 +137,7 @@ const loginSlice = createSlice({
         state.user = JSON.parse(user)
         state.isAuthenticated = true
         state.isFirstLogin = state.user?.isFirstLogin || false
+        state.loading = false // Ensure loading is false when restoring auth
       }
     },
     setShowFirstLoginModal: (state, action) => {
@@ -145,6 +148,20 @@ const loginSlice = createSlice({
     },
     closeFirstLoginModal: (state) => {
       state.showFirstLoginModal = false
+    },
+    resetLogin: (state) => {
+      state.user = null
+      state.token = null
+      state.loading = false    
+      state.error = null
+      state.isAuthenticated = false
+      state.isFirstLogin = false
+      state.showFirstLoginModal = false
+      state.firstLoginEmail = null
+    },
+    // Add a new action to reset loading state after rehydration
+    resetLoadingState: (state) => {
+      state.loading = false
     },
   },
   extraReducers: (builder) => {
@@ -191,6 +208,7 @@ export const {
   setShowFirstLoginModal,
   navigateToPasswordReset,
   closeFirstLoginModal,
+  resetLoadingState,
 } = loginSlice.actions
 
 export default loginSlice.reducer

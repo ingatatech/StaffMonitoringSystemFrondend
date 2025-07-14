@@ -276,7 +276,6 @@ export const startTaskConversation = createAsyncThunk(
     { rejectWithValue, dispatch },
   ) => {
     try {
-      console.log("Starting task conversation:", { senderId, receiverId, taskId, taskTitle })
 
       const response = await axios.post(
         `${import.meta.env.VITE_BASE_URL}/v1/chat/start-chat`,
@@ -301,12 +300,10 @@ export const startTaskConversation = createAsyncThunk(
         taskTitle,
       }
 
-      console.log("Task conversation created:", result)
 
       return result
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Failed to start task conversation"
-      console.error("Error starting task conversation:", errorMessage)
       showErrorToast(errorMessage)
       return rejectWithValue(errorMessage)
     }
@@ -431,7 +428,6 @@ const chatSlice = createSlice({
       const { conversationId, sender, receiver, task } = action.payload
 
       if (!conversationId || !receiver) {
-        console.error("Invalid conversation data:", action.payload)
         return
       }
 
@@ -453,7 +449,6 @@ const chatSlice = createSlice({
         }
 
         state.conversations.unshift(newConversation)
-        console.log("Added new conversation to Redux:", conversationId)
       }
     },
     resetChat: (state) => {
@@ -641,12 +636,10 @@ const chatSlice = createSlice({
           }
 
           state.conversations.unshift(newConversation)
-          console.log("Added new task conversation to state:", conversationId)
         }
 
         // Always select the conversation (whether new or existing)
         state.selectedConversation = conversationId
-        console.log("Selected conversation:", conversationId)
       })
   },
 })

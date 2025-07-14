@@ -1,5 +1,6 @@
+// @ts-nocheck
 import { configureStore, combineReducers } from "@reduxjs/toolkit"
-import { persistStore, persistReducer } from "redux-persist"
+import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from "redux-persist"
 import storage from "redux-persist/lib/storage"
 import loginReducer from "./Slices/LoginSlices"
 import taskReducer from "./Slices/TaskSlices"
@@ -27,10 +28,34 @@ import chatReducer from "../components/Chat/chatSlice"
 import ProfileReducer from "../Redux/Slices/profileSlice"
 import authReducer from "../Redux/Slices/AuthSlice"
 import taskTypesReducer from "../Redux/Slices/TaskTypeSlices"
+import leaveReducer from "./Slices/leaveSlice"
+
 const persistConfig = {
   key: "root",
   storage,
   whitelist: ["login"], 
+  transforms: [
+    {
+      in: (inboundState: any, key: string) => {
+        if (key === 'login' && inboundState) {
+          return {
+            ...inboundState,
+            loading: false,
+          }
+        }
+        return inboundState
+      },
+      out: (outboundState: any, key: string) => {
+        if (key === 'login' && outboundState) {
+          return {
+            ...outboundState,
+            loading: false,
+          }
+        }
+        return outboundState
+      },
+    },
+  ],
 }
 
 const rootReducer = combineReducers({
@@ -56,11 +81,11 @@ const rootReducer = combineReducers({
   reporting: reportingReducer,
   taskReport: taskReportReducer,
   systemLeader: systemLeaderReducer,
-  chat:chatReducer,
+  chat: chatReducer,
   profile: ProfileReducer,
   auth: authReducer,
-  taskTypes:taskTypesReducer
-
+  taskTypes: taskTypesReducer,
+  leave: leaveReducer,
 })
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)
@@ -69,7 +94,9 @@ const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      serializableCheck: false,
+      serializableCheck: {
+        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+      },
     }),
 })
 

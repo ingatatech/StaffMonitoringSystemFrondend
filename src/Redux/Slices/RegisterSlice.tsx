@@ -76,7 +76,16 @@ interface User {
   firstName: string
   lastName: string
   role: string
-  // Add other user properties as needed
+  position: {
+    id: number;
+    title: string;
+    description: string | null;
+    directSupervisor: {
+      id: number;
+      title: string;
+      description: string | null;
+    } | null;
+  };
 }
 
 interface RegisterData {

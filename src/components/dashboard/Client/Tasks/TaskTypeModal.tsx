@@ -87,7 +87,6 @@ const TaskTypeModal: React.FC<TaskTypeModalProps> = ({
       })
       onClose()
     } catch (error) {
-      console.error("Form submission error:", error)
     } finally {
       setIsSubmitting(false)
     }

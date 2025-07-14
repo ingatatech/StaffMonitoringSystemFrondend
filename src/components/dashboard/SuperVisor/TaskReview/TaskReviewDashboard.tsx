@@ -1,6 +1,5 @@
 // @ts-nocheck
 "use client"
-
 import { useEffect, useState } from "react"
 import { useAppDispatch, useAppSelector } from "../../../../Redux/hooks"
 import {
@@ -12,7 +11,7 @@ import {
   selectFilters,
   setFilters,
   resetFilters,
-  fetchSupervisorTeamMembers
+  fetchSupervisorTeamMembers,
 } from "../../../../Redux/Slices/TaskReviewSlice"
 import { getSupervisorId } from "../../../../utilis/auth"
 import withSupervisorAuth from "../../../Auth/withSupervisorAuth"
@@ -22,8 +21,9 @@ import FilterSection from "../Task/FilterSection"
 import Pagination from "../Task/Pagination"
 import { useNavigate } from "react-router-dom"
 import TaskReportComponent from "./TaskReportComponent"
-import React from "react"
 import TaskWarningSection from "../Task/TaskWarningSection"
+import TaskSummaryCards from "./TaskSummaryCards" 
+import React from "react"
 
 const TaskReviewDashboard = () => {
   const dispatch = useAppDispatch()
@@ -36,24 +36,37 @@ const TaskReviewDashboard = () => {
   const [supervisorId, setSupervisorId] = useState<number | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [teamTasksResponse, setTeamTasksResponse] = useState<any>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     const id = getSupervisorId()
     if (id) {
       setSupervisorId(id)
-      // Fetch team members immediately so they're available in filters
       dispatch(fetchSupervisorTeamMembers(id))
+
+      setSummaryLoading(true)
+      dispatch(
+        fetchTeamTasks({
+          supervisorId: id,
+          page: 1,
+          limit: 100,
+          filters: {}, 
+        }),
+      ).then((result: any) => {
+        if (result.payload) {
+          setTeamTasksResponse(result.payload)
+        }
+        setSummaryLoading(false)
+      }).catch(() => {
+        setSummaryLoading(false)
+      })
     }
   }, [dispatch])
 
   // Check if any filters are active
-  const hasActiveFilters = !!(
-    filters.userName ||
-    filters.status ||
-    filters.startDate ||
-    filters.endDate
-  )
+  const hasActiveFilters = !!(filters.userName || filters.status || filters.startDate || filters.endDate)
 
   useEffect(() => {
     // Only fetch tasks when filters are applied
@@ -109,15 +122,26 @@ const TaskReviewDashboard = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-row items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Task Review Dashboard</h1>
-          <p className="text-gray-600 mt-2">Review and manage tasks submitted by your team members</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <p className="text-xl font-bold text-gray-600">{user?.username}'s Team</p>
+      {/* Enhanced Header Card */}
+      <div className="bg-white shadow-md rounded-xl px-6 py-4 mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-1">Task Review Dashboard</h1>
+            <p className="text-sm text-gray-500">Review and manage tasks submitted by your team members</p>
+          </div>
+          <div className="flex items-center">
+            <div className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full shadow-sm">
+              <p className="text-sm font-medium truncate">{user?.username}'s Supervisor</p>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Task Summary Cards - Always displayed with all data from database */}
+      <TaskSummaryCards 
+        teamTasksResponse={teamTasksResponse} 
+        loading={summaryLoading} 
+      />
 
       {/* Filter Section with data attribute for scrolling */}
       <div data-filter-section>
@@ -152,7 +176,6 @@ const TaskReviewDashboard = () => {
         <div className="space-y-6">
           {/* Task Report Component - Only show when there are tasks */}
           {!loading && teamTasks && teamTasks.length > 0 && <TaskReportComponent teamTasks={teamTasks} />}
-
           <TaskList
             teamTasks={teamTasks}
             loading={loading}
@@ -161,7 +184,6 @@ const TaskReviewDashboard = () => {
             onClearFilters={handleClearFilters}
             onOpenFilters={handleOpenFilters}
           />
-
           {/* Only show pagination when there are filtered results */}
           {teamTasks.length > 0 && (
             <Pagination
@@ -173,7 +195,6 @@ const TaskReviewDashboard = () => {
           )}
         </div>
       )}
-
       <TaskReviewModal isOpen={isModalOpen} onClose={handleCloseModal} supervisorId={supervisorId} />
     </div>
   )

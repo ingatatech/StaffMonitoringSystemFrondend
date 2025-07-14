@@ -17,9 +17,13 @@ import {
   FaPaperclip,
   FaExchangeAlt,
   FaTags,
+  FaUsers,
+  FaUserTie,
+  FaExclamationCircle,
 } from "react-icons/fa"
 import { useAppSelector, useAppDispatch } from "../../../Redux/hooks"
 import { fetchTaskTypes } from "../../../Redux/Slices/TaskTypeSlices"
+import { fetchAllTeams } from "../../../Redux/Slices/teamManagementSlice"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
 import FileUpload from "./FileUpload"
 
@@ -52,9 +56,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
   const user = useAppSelector((state) => state.login.user)
   const { isReworking } = useAppSelector((state) => state.task)
   const { taskTypes, loading: taskTypesLoading } = useAppSelector((state) => state.taskTypes)
+  const { teams, loading: teamsLoading } = useAppSelector((state) => state.teamManagement) // NEW: Get teams from Redux
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formProgress, setFormProgress] = useState(0)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  
+  // NEW: Team-related state
+  const [userTeams, setUserTeams] = useState([])
+  const [selectedTeamId, setSelectedTeamId] = useState("")
+  const [isLoadingTeams, setIsLoadingTeams] = useState(false)
+  const [reviewTypeError, setReviewTypeError] = useState("") // NEW: Review type validation state
 
   const today = new Date().toISOString().split("T")[0]
   const showCompanyField = user?.company !== null
@@ -72,8 +83,41 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
     achieved_deliverables: "",
     created_by: user?.id || 0,
     status: TaskStatus.IN_PROGRESS,
-    task_type_id: "", // ENHANCEMENT: Add task type field
+    task_type_id: "",
+    // NEW: Review Type fields
+    isTeamTask: false,
+    isForDirectSupervisorTasks: true, // Default to Direct Supervisor Review
   })
+
+  // NEW: Fetch teams when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const fetchTeams = async () => {
+        setIsLoadingTeams(true)
+        try {
+          await dispatch(fetchAllTeams()).unwrap()
+        } catch (error) {
+        } finally {
+          setIsLoadingTeams(false)
+        }
+      }
+
+      fetchTeams()
+
+      // Set up interval to re-fetch teams every 30 seconds for real-time updates
+      const interval = setInterval(fetchTeams, 30000)
+
+      return () => clearInterval(interval)
+    }
+  }, [isOpen, dispatch])
+
+  // NEW: Filter teams to show only teams where current user is a member
+  useEffect(() => {
+    if (teams && user?.id) {
+      const filteredTeams = teams.filter((team) => team.members && team.members.some((member) => member.id === user.id))
+      setUserTeams(filteredTeams)
+    }
+  }, [teams, user?.id])
 
   // ENHANCEMENT: Fetch task types when modal opens
   useEffect(() => {
@@ -98,9 +142,29 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
           achieved_deliverables: initialData.achieved_deliverables || "",
           created_by: initialData.created_by || user?.id || 0,
           status: initialData.status || TaskStatus.IN_PROGRESS,
-          task_type_id: initialData.taskType?.id?.toString() || "", // ENHANCEMENT: Set existing task type
+          task_type_id: initialData.taskType?.id?.toString() || "",
+          // NEW: Set review type fields from initial data
+          isTeamTask: initialData.isTeamTask || false,
+          isForDirectSupervisorTasks: initialData.isForDirectSupervisorTasks !== undefined 
+            ? initialData.isForDirectSupervisorTasks 
+            : true,
         })
-        setSelectedFiles([])
+
+        // NEW: Set team ID if this is a team task
+        if (initialData.isTeamTask && initialData.review_team_id) {
+          setSelectedTeamId(initialData.review_team_id.toString())
+        }
+
+        if (initialData.attached_documents && initialData.attached_documents.length > 0) {
+          const existingDocs = initialData.attached_documents.map(doc => {
+            return new File([], doc.name || "document", {
+              type: doc.type || "application/octet-stream"
+            })
+          })
+          setSelectedFiles(existingDocs)
+        } else {
+          setSelectedFiles([])
+        }
       } else {
         setTaskData({
           title: "",
@@ -115,9 +179,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
           achieved_deliverables: "",
           created_by: user?.id || 0,
           status: TaskStatus.IN_PROGRESS,
-          task_type_id: "", // ENHANCEMENT: Reset task type
+          task_type_id: "",
+          // NEW: Reset review type fields
+          isTeamTask: false,
+          isForDirectSupervisorTasks: true,
         })
         setSelectedFiles([])
+        setSelectedTeamId("") // NEW: Reset team selection
+        setReviewTypeError("") // NEW: Clear review type error
       }
     }
   }, [isOpen, mode, initialData, showCompanyField, user, today])
@@ -165,9 +234,65 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
     setSelectedFiles(files)
   }
 
+  // NEW: Handle review type selection
+  const handleReviewTypeChange = (reviewType: "team" | "supervisor") => {
+    setReviewTypeError("") // Clear any existing error
+
+    if (reviewType === "team") {
+      setTaskData((prev) => ({
+        ...prev,
+        isTeamTask: true,
+        isForDirectSupervisorTasks: false,
+      }))
+    } else {
+      setTaskData((prev) => ({
+        ...prev,
+        isTeamTask: false,
+        isForDirectSupervisorTasks: true,
+      }))
+      // NEW: Clear team selection when switching to supervisor review
+      setSelectedTeamId("")
+    }
+  }
+
+  // NEW: Handle team selection
+  const handleTeamSelection = (teamId: string) => {
+    setSelectedTeamId(teamId)
+    if (teamId) {
+      // NEW: Auto-set isTeamTask when team is selected
+      setTaskData((prev) => ({
+        ...prev,
+        isTeamTask: true,
+        isForDirectSupervisorTasks: false,
+      }))
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (isSubmitting || (mode === "rework" && isReworking)) return
+
+    // NEW: Validate review type selection
+    if (!taskData.isTeamTask && !taskData.isForDirectSupervisorTasks) {
+      setReviewTypeError("Please select a review type")
+      return
+    }
+
+    // NEW: Additional validation to ensure only one option is selected
+    if (taskData.isTeamTask && taskData.isForDirectSupervisorTasks) {
+      setReviewTypeError("Only one review type can be selected")
+      return
+    }
+
+    // NEW: Validate team selection if team review is chosen
+    if (taskData.isTeamTask && !selectedTeamId) {
+      setReviewTypeError("Please select a team for team review")
+      return
+    }
+
+    if (formProgress < 100) {
+      return
+    }
 
     setIsSubmitting(true)
     try {
@@ -176,10 +301,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
         // ENHANCEMENT: Include task type ID if selected
         task_type_id: taskData.task_type_id ? Number.parseInt(taskData.task_type_id) : undefined,
         attached_documents: selectedFiles.length > 0 ? selectedFiles : undefined,
+        // NEW: Include review type fields and team ID
+        isTeamTask: taskData.isTeamTask,
+        isForDirectSupervisorTasks: taskData.isForDirectSupervisorTasks,
+        review_team_id: selectedTeamId ? Number.parseInt(selectedTeamId) : undefined,
       }
 
       await onSubmit(submissionData)
 
+      // Reset form including new fields
       setTaskData({
         title: "",
         description: "",
@@ -193,12 +323,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
         achieved_deliverables: "",
         created_by: user?.id || 0,
         status: TaskStatus.IN_PROGRESS,
-        task_type_id: "", // ENHANCEMENT: Reset task type
+        task_type_id: "",
+        // NEW: Reset review type to default
+        isTeamTask: false,
+        isForDirectSupervisorTasks: true,
       })
       setSelectedFiles([])
+      setSelectedTeamId("") // NEW: Reset team selection
+      setReviewTypeError("") // NEW: Clear review type error
       onClose()
     } catch (error) {
-      console.error("Task submission error:", error)
     } finally {
       setIsSubmitting(false)
     }
@@ -399,6 +533,128 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
                   <p className="text-sm text-gray-500 mt-1">{taskData.description.length}/500 characters</p>
                 </div>
 
+                {/* NEW: Review Type Section */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Task Type <span className="text-red">*</span>
+                  </label>
+                  <div className="space-y-2">
+                    {/* Team Review Option */}
+                    <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        id="team-review"
+                        name="reviewType"
+                        checked={taskData.isTeamTask}
+                        onChange={() => handleReviewTypeChange("team")}
+                        disabled={isLoading}
+                        className="mt-1 h-4 w-4 text-blue border-gray-300 focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="team-review" className="flex items-center cursor-pointer">
+                          <FaUsers className="text-blue mr-2 text-sm" />
+                          <span className="text-sm font-medium text-gray-900">Team Task</span>
+                        </label>
+                      </div>
+                    </div>
+                    
+                    {taskData.isTeamTask && (
+                      <div className="mt-3 pl-7">
+                        <label htmlFor="team-select" className="block text-sm font-medium text-gray-700 mb-1">
+                          Select Team <span className="text-red">*</span>
+                        </label>
+                        <Select
+                          value={selectedTeamId}
+                          onValueChange={handleTeamSelection}
+                          disabled={isLoading || isLoadingTeams}
+                        >
+                          <SelectTrigger className="w-full bg-white h-10 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed">
+                            <div className="flex items-center">
+                              <FaUsers className="mr-2 text-gray-400 text-xs" />
+                              <span className="ml-1">
+                                {isLoadingTeams || teamsLoading ? (
+                                  <span className="flex items-center">
+                                    <FaSpinner className="animate-spin mr-2 text-xs" />
+                                    Loading teams...
+                                  </span>
+                                ) : selectedTeamId ? (
+                                  userTeams.find((team) => team.id.toString() === selectedTeamId)?.name ||
+                                  "Select a team"
+                                ) : (
+                                  "Select a team"
+                                )}
+                              </span>
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent className="bg-white">
+                            {isLoadingTeams || teamsLoading ? (
+                              <SelectItem value="loading" disabled>
+                                <div className="flex items-center">
+                                  <FaSpinner className="animate-spin mr-2 text-xs" />
+                                  <span>Loading teams...</span>
+                                </div>
+                              </SelectItem>
+                            ) : userTeams.length === 0 ? (
+                              <SelectItem value="no-teams" disabled>
+                                <div className="flex items-center">
+                                  <FaUsers className="text-gray-400 mr-2 text-xs" />
+                                  <span>No teams available</span>
+                                </div>
+                              </SelectItem>
+                            ) : (
+                              userTeams.map((team) => (
+                                <SelectItem key={team.id} value={team.id.toString()}>
+                                  <div className="flex items-center">
+                                    <FaUsers className="text-blue mr-2 text-xs" />
+                                    <div className="flex flex-col">
+                                      <span>{team.name}</span>
+                                      {team.description && (
+                                        <span className="text-xs text-gray-500">{team.description}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        {(isLoadingTeams || teamsLoading) && (
+                          <p className="text-xs text-gray-500 mt-1 flex items-center">
+                            <FaSpinner className="animate-spin mr-1 text-xs" />
+                            Checking for new teams...
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Direct Supervisor Review Option */}
+                    <div className="flex items-start space-x-3 p-3 border rounded-md hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        id="supervisor-review"
+                        name="reviewType"
+                        checked={taskData.isForDirectSupervisorTasks}
+                        onChange={() => handleReviewTypeChange("supervisor")}
+                        disabled={isLoading}
+                        className="mt-1 h-4 w-4 text-green border-gray-300 focus:ring-green-500"
+                      />
+                      <div className="flex-1">
+                        <label htmlFor="supervisor-review" className="flex items-center cursor-pointer">
+                          <FaUserTie className="text-green mr-2 text-sm" />
+                          <span className="text-sm font-medium text-gray-900">Ordinary task</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  {/* NEW: Error message for review type */}
+                  {reviewTypeError && (
+                    <p className="text-xs text-red mt-1 flex items-center">
+                      <FaExclamationCircle className="mr-1" />
+                      {reviewTypeError}
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label htmlFor="due_date" className="block text-sm font-medium text-gray-700 mb-1">
                     Due Date
@@ -516,6 +772,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSubmit, mode =
                     disabled={isLoading}
                     maxFiles={5}
                     maxFileSize={10}
+                    existingFiles={mode === "rework" && initialData?.attached_documents ?
+                      initialData.attached_documents.map(doc => ({
+                        name: doc.name,
+                        url: doc.url,
+                        size: doc.size,
+                        type: doc.type
+                      })) : []
+                    }
                   />
                 </div>
               </div>

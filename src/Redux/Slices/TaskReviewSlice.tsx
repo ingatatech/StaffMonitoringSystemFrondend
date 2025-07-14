@@ -20,7 +20,33 @@ export interface TeamMember {
   subordinateCount: number
   teams?: string[] // <-- Add this line to support teams for overall filter
 }
-
+export interface FurtherReviewTask {
+  id: number;
+  title: string;
+  description: string;
+  createdBy: {
+    id: number;
+    username: string;
+    firstName: string;
+    lastName: string;
+    department: string | null;
+    company: string | null;
+  };
+  submittedDate: string;
+  reviewComment: string;
+  review_status: string;
+  status: string;
+  department: string;
+  company_served: string | null;
+  organization: string;
+  reviewTeam: {
+    id: number;
+    name: string;
+  } | null;
+  comments: TaskComment[];
+  review_history: any[];
+  updated_at: string;
+}
 export interface Supervisor {
   id: number
   username: string
@@ -81,6 +107,8 @@ export interface Task {
   reviewed_at: string | null
   comment: TaskComment[]
   created_by?: number // Added
+  furtherReviewSupervisorId?: number | null
+  furtherReviewComment?: string | null
 }
 
 export interface DailySubmission {
@@ -133,6 +161,7 @@ export interface Pagination {
 }
 export interface TaskReviewFilters {
   status?: string
+  review_status?: string
   startDate?: string
   endDate?: string
   userName?: string
@@ -276,6 +305,9 @@ interface TaskReviewState {
     userTaskReport: UserTaskReport | null
   userTaskReportLoading: boolean
   userTaskReportError: string | null
+  furtherReviewTasks: FurtherReviewTask[];
+  furtherReviewTasksLoading: boolean;
+  furtherReviewTasksError: string | null;
 }
 
 
@@ -311,89 +343,114 @@ const initialState: TaskReviewState = {
    userTaskReport: null,
   userTaskReportLoading: false,
   userTaskReportError: null,
+  furtherReviewTasks: [],
+  furtherReviewTasksLoading: false,
+  furtherReviewTasksError: null,
 }
 
-// Async thunks
-export const fetchTeamTasks = createAsyncThunk(
-  "taskReview/fetchTeamTasks",
-  async (
-    {
-      supervisorId,
-      page = 1,
-      limit = 10,
-      filters,
-    }: {
-      supervisorId: number
-      page?: number
-      limit?: number
-      filters?: TaskReviewFilters
-    },
-    { rejectWithValue, getState },
-  ) => {
+export const fetchFurtherReviewTasks = createAsyncThunk(
+  "taskReview/fetchFurtherReviewTasks",
+  async (supervisorId: number, { rejectWithValue }) => {
     try {
-      const queryParams = new URLSearchParams()
-      queryParams.append("page", page.toString())
-      queryParams.append("limit", limit.toString())
-
-      // Apply filters if they exist
-      if (filters) {
-        if (filters.status) {
-          queryParams.append("status", filters.status)
-        }
-
-        if (filters.startDate) {
-          queryParams.append("startDate", filters.startDate)
-        }
-
-        if (filters.endDate) {
-          queryParams.append("endDate", filters.endDate)
-        }
-
-        if (filters.userName) {
-          queryParams.append("userName", filters.userName)
-        }
-        if (filters?.userName) {
-          queryParams.append("userName", filters.userName)
-        }
-
-        if (filters?.userLevel) {
-          queryParams.append("userLevel", filters.userLevel)
-        }
-
-        if (filters?.company) {
-          queryParams.append("company", filters.company)
-        }
-
-        if (filters?.department) {
-          queryParams.append("department", filters.department)
-        }
-
-        if (filters?.project) {
-          queryParams.append("project", filters.project)
-        }
-      }
-
-      const state = store.getState() as RootState
-      const organizationId = state.login.user?.organization?.id
-      if (!organizationId) {
-        return
-      }
-      const token = localStorage.getItem("token")
+      const token = localStorage.getItem("token");
       const response = await axios.get(
-        `${import.meta.env.VITE_BASE_URL}/task/${organizationId}/supervisor/${supervisorId}/team-tasks?${queryParams.toString()}`,
+        `${import.meta.env.VITE_BASE_URL}/task/tasks/further-review/${supervisorId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        },
-      )
-
-      return response.data
+        }
+      );
+      return response.data;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || "Failed to fetch team tasks")
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch further review tasks");
     }
-  },
-)
+  }
+);
+
+// Async thunks
+  export const fetchTeamTasks = createAsyncThunk(
+    "taskReview/fetchTeamTasks",
+    async (
+      {
+        supervisorId,
+        page = 1,
+        limit = 10,
+        filters,
+      }: {
+        supervisorId: number
+        page?: number
+        limit?: number
+        filters?: TaskReviewFilters
+      },
+      { rejectWithValue, getState },
+    ) => {
+      try {
+        const queryParams = new URLSearchParams()
+        queryParams.append("page", page.toString())
+        queryParams.append("limit", limit.toString())
+
+        // Apply filters if they exist
+        if (filters) {
+          if (filters.status) {
+            queryParams.append("status", filters.status)
+          }
+
+          if (filters.startDate) {
+            queryParams.append("startDate", filters.startDate)
+          }
+
+          if (filters.endDate) {
+            queryParams.append("endDate", filters.endDate)
+          }
+
+          if (filters.userName) {
+            queryParams.append("userName", filters.userName)
+          }
+          if (filters?.userName) {
+            queryParams.append("userName", filters.userName)
+          }
+
+          if (filters?.userLevel) {
+            queryParams.append("userLevel", filters.userLevel)
+          }
+
+          if (filters?.company) {
+            queryParams.append("company", filters.company)
+          }
+
+          if (filters?.department) {
+            queryParams.append("department", filters.department)
+          }
+
+          if (filters?.project) {
+            queryParams.append("project", filters.project)
+          }
+        }
+
+        const state = store.getState() as RootState
+        const organizationId = state.login.user?.organization?.id
+        const supervisorId = state.login.user?.id
+
+        if (!organizationId) {
+          return
+        }
+        const token = localStorage.getItem("token")
+        const response = await axios.get(
+          `${import.meta.env.VITE_BASE_URL}/task/${organizationId}/supervisor/${supervisorId}/team-tasks?${queryParams.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+
+        return response.data
+      } catch (error: any) {
+        return rejectWithValue(error.response?.data?.message || "Failed to fetch team tasks")
+      }
+    },
+  )
 
 export const fetchSupervisorTeamMembers = createAsyncThunk(
   "taskReview/fetchSupervisorTeamMembers",
@@ -422,7 +479,13 @@ export const fetchSupervisorTeamMembers = createAsyncThunk(
 
 export const reviewTask = createAsyncThunk(
   "taskReview/reviewTask",
-  async (reviewData: ReviewTaskPayload, { rejectWithValue }) => {
+  async (reviewData: {
+    taskId: number
+    status: "approved" | "rejected" | "further_review"
+    comment?: string
+    furtherReviewSupervisorId?: number
+    reviewComment?: string
+  }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("token")
       const response = await axios.post(
@@ -430,7 +493,8 @@ export const reviewTask = createAsyncThunk(
         {
           status: reviewData.status,
           comment: reviewData.comment,
-          // Remove reviewedBy - it will be set automatically from authenticated user
+          furtherReviewSupervisorId: reviewData.furtherReviewSupervisorId,
+          reviewComment: reviewData.reviewComment,
         },
         {
           headers: {
@@ -678,7 +742,7 @@ export const fetchAllDailyTasks = createAsyncThunk(
 
       const token = localStorage.getItem("token")
       const response = await axios.get(
-        `${import.meta.env.VITE_BASE_URL}/task/${organizationId}/admin/all-daily-tasks?${queryParams.toString()}`,
+        `${import.meta.env.VITE_BASE_URL}/task/${organizationId}/admin/all-daily-tasks`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -781,84 +845,96 @@ const taskReviewSlice = createSlice({
         state.adminTeamTasksLoading = false
         state.adminTeamTasksError = action.payload as string
       })
-      .addCase(reviewTask.fulfilled, (state, action) => {
-        state.reviewLoading = false
+// In the reviewTask.fulfilled case in TaskReviewModal.tsx
+.addCase(reviewTask.fulfilled, (state, action) => {
+  state.reviewLoading = false;
 
-        // Update the reviewed task in the state
-        if (state.selectedTask) {
-          state.selectedTask = {
-            ...state.selectedTask,
-            review_status: action.payload.data.task.review_status,
-            reviewed: true,
-            reviewed_by: action.payload.data.reviewedBy.id,
-            reviewed_at: action.payload.data.task.reviewed_at,
-            comment: action.payload.data.task.comment,
-          }
-        }
+  // First ensure teamTasks exists and is an array
+  if (!Array.isArray(state.teamTasks)) {
+    state.teamTasks = [];
+  }
 
-        // Update the task in the teamTasks array
-        const reviewedTaskId = action.payload.data.task.id
+  // Update the reviewed task in the state
+  if (state.selectedTask) {
+    state.selectedTask = {
+      ...state.selectedTask,
+      review_status: action.payload.data.task.review_status,
+      reviewed: true,
+      reviewed_by: action.payload.data.reviewedBy.id,
+      reviewed_at: action.payload.data.task.reviewed_at,
+      comment: action.payload.data.task.comment,
+      furtherReviewSupervisorId: action.payload.data.task.furtherReviewSupervisorId || null,
+      furtherReviewComment: action.payload.data.task.furtherReviewComment || null,
+    };
+  }
 
-        state.teamTasks = state.teamTasks.map((teamMember) => {
-          const updatedSubmissions = { ...teamMember.submissions }
+  // Update the task in the teamTasks array
+  const reviewedTaskId = action.payload.data.task.id;
 
-          // Loop through each date in submissions
-          Object.keys(updatedSubmissions).forEach((date) => {
-            // Update the task if it exists in this submission
-            updatedSubmissions[date].tasks = updatedSubmissions[date].tasks.map((task) =>
-              task.id === reviewedTaskId
-                ? {
-                    ...task,
-                    review_status: action.payload.data.task.review_status,
-                    reviewed: true,
-                    reviewed_by: action.payload.data.reviewedBy.id,
-                    reviewed_at: action.payload.data.task.reviewed_at,
-                    comment: action.payload.data.task.comment,
-                  }
-                : task,
-            )
-          })
+  state.teamTasks = state.teamTasks.map((teamMember) => {
+    const updatedSubmissions = { ...teamMember.submissions };
 
-          return {
-            ...teamMember,
-            submissions: updatedSubmissions,
-          }
-        })
-
-        // Update the task in adminTeamTasks if it exists
-        if (state.adminTeamTasks.length > 0) {
-          state.adminTeamTasks = state.adminTeamTasks.map((team) => {
-            const updatedMembers = team.members.map((member) => {
-              const updatedDailyTasks = member.dailyTasks.map((dailyTask) => {
-                const updatedTasks = dailyTask.tasks.map((task) =>
-                  task.id === reviewedTaskId
-                    ? {
-                        ...task,
-                        review_status: action.payload.data.task.review_status,
-                        reviewed: true,
-                        reviewed_by: action.payload.data.reviewedBy.id,
-                        reviewed_at: action.payload.data.task.reviewed_at,
-                        comment: action.payload.data.task.comment,
-                      }
-                    : task,
-                )
-                return {
-                  ...dailyTask,
-                  tasks: updatedTasks,
-                }
-              })
-              return {
-                ...member,
-                dailyTasks: updatedDailyTasks,
-              }
-            })
-            return {
-              ...team,
-              members: updatedMembers,
+    // Loop through each date in submissions
+    Object.keys(updatedSubmissions).forEach((date) => {
+      // Update the task if it exists in this submission
+      updatedSubmissions[date].tasks = updatedSubmissions[date].tasks.map((task) =>
+        task.id === reviewedTaskId
+          ? {
+              ...task,
+              review_status: action.payload.data.task.review_status,
+              reviewed: true,
+              reviewed_by: action.payload.data.reviewedBy.id,
+              reviewed_at: action.payload.data.task.reviewed_at,
+              comment: action.payload.data.task.comment,
+              furtherReviewSupervisorId: action.payload.data.task.furtherReviewSupervisorId || null,
+              furtherReviewComment: action.payload.data.task.furtherReviewComment || null,
             }
-          })
-        }
-      })
+          : task
+      );
+    });
+
+    return {
+      ...teamMember,
+      submissions: updatedSubmissions,
+    };
+  });
+
+  // Update the task in adminTeamTasks if it exists
+  if (state.adminTeamTasks && Array.isArray(state.adminTeamTasks)) {
+    state.adminTeamTasks = state.adminTeamTasks.map((team) => {
+      const updatedMembers = team.members.map((member) => {
+        const updatedDailyTasks = member.dailyTasks.map((dailyTask) => {
+          const updatedTasks = dailyTask.tasks.map((task) =>
+            task.id === reviewedTaskId
+              ? {
+                  ...task,
+                  review_status: action.payload.data.task.review_status,
+                  reviewed: true,
+                  reviewed_by: action.payload.data.reviewedBy.id,
+                  reviewed_at: action.payload.data.task.reviewed_at,
+                  comment: action.payload.data.task.comment,
+                  furtherReviewSupervisorId: action.payload.data.task.furtherReviewSupervisorId || null,
+                  furtherReviewComment: action.payload.data.task.furtherReviewComment || null,
+                }
+              : task
+          );
+          return {
+            ...dailyTask,
+            tasks: updatedTasks,
+          };
+        });
+        return {
+          ...member,
+          dailyTasks: updatedDailyTasks,
+        };
+      });
+      return {
+        ...team,
+        members: updatedMembers,
+      };
+    });
+  }
+})
       .addCase(reviewTask.rejected, (state, action) => {
         state.reviewLoading = false
         state.error = action.payload as string
@@ -888,6 +964,18 @@ const taskReviewSlice = createSlice({
         state.userTaskReportLoading = false
         state.userTaskReportError = action.payload as string
       })
+      .addCase(fetchFurtherReviewTasks.pending, (state) => {
+      state.furtherReviewTasksLoading = true;
+      state.furtherReviewTasksError = null;
+    })
+    .addCase(fetchFurtherReviewTasks.fulfilled, (state, action) => {
+      state.furtherReviewTasksLoading = false;
+      state.furtherReviewTasks = action.payload.data;
+    })
+    .addCase(fetchFurtherReviewTasks.rejected, (state, action) => {
+      state.furtherReviewTasksLoading = false;
+      state.furtherReviewTasksError = action.payload as string;
+    });
   },
 })
 
@@ -912,7 +1000,9 @@ export const selectAdminTeamTasksLoading = (state: RootState) => state.taskRevie
 export const selectAdminTeamTasksError = (state: RootState) => state.taskReview.adminTeamTasksError
 export const selectAllDailyTasksLoading = (state: RootState) => state.taskReview.allDailyTasksLoading
 export const selectAllDailyTasks = (state: RootState) => state.taskReview.allDailyTasks
-
+export const selectFurtherReviewTasks = (state: RootState) => state.taskReview.furtherReviewTasks;
+export const selectFurtherReviewTasksLoading = (state: RootState) => state.taskReview.furtherReviewTasksLoading;
+export const selectFurtherReviewTasksError = (state: RootState) => state.taskReview.furtherReviewTasksError;
 export const selectUserTaskReport = (state: RootState) => state.taskReview.userTaskReport
 export const selectUserTaskReportLoading = (state: RootState) => state.taskReview.userTaskReportLoading
 export const selectUserTaskReportError = (state: RootState) => state.taskReview.userTaskReportError

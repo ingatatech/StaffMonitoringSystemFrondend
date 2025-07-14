@@ -144,9 +144,9 @@ export const deleteLevel = createAsyncThunk("level/deleteLevel", async (id: numb
 export const fetchAllUsers = createAsyncThunk("teamManagement/fetchAllUsers", async (_, { rejectWithValue,getState }) => {
   try {
     const state = getState() as RootState;
+   const token = localStorage.getItem("token")
     const organizationId = state.login.user?.organization?.id;
-    const token = localStorage.getItem("token") 
-    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users`, {
+    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users?getAll=true`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

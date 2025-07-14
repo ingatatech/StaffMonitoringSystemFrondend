@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit"
 import axios from "axios"
 import { showErrorToast, showSuccessToast } from "../../utilis/ToastProps"
@@ -34,6 +33,16 @@ interface SupervisoryLevel {
   updated_at: string
 }
 
+interface DirectSupervisor {
+  id: number
+  title: string
+}
+
+interface SubordinatePosition {
+  id: number
+  title: string
+}
+
 interface Position {
   id: number
   title: string
@@ -44,11 +53,33 @@ interface Position {
   company: Company | null
   department: Department | null
   supervisoryLevel: SupervisoryLevel | null
+  directSupervisor: DirectSupervisor | null
+  subordinatePositions: SubordinatePosition[]
   organization_id?: number
+}
+
+interface AvailableSupervisor {
+  id: number
+  title: string
+  company: string | null
+  department: string | null
+  supervisoryLevel: string | null
+}
+
+interface PositionHierarchy {
+  id: number
+  title: string
+  company: string | null
+  department: string | null
+  supervisoryLevel: string | null
+  isActive: boolean
+  children: PositionHierarchy[]
 }
 
 interface PositionState {
   positions: Position[]
+  availableSupervisors: AvailableSupervisor[]
+  positionHierarchy: PositionHierarchy[]
   selectedPosition: Position | null
   loading: boolean
   error: string | null
@@ -57,6 +88,8 @@ interface PositionState {
 // Initial state
 const initialState: PositionState = {
   positions: [],
+  availableSupervisors: [],
+  positionHierarchy: [],
   selectedPosition: null,
   loading: false,
   error: null,
@@ -88,15 +121,68 @@ export const fetchPositions = createAsyncThunk("positions/fetchPositions", async
   }
 })
 
+export const fetchAvailableSupervisors = createAsyncThunk(
+  "positions/fetchAvailableSupervisors", 
+  async (_, { rejectWithValue, getState }) => {
+    try {
+      const token = localStorage.getItem("token")
+      const state = getState() as RootState
+      const organizationId = state.login.user?.organization?.id
+
+      if (!organizationId) {
+        throw new Error("Organization ID is missing")
+      }
+
+      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/v1/position/${organizationId}/supervisors`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      return response.data.data
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to fetch available supervisors"
+      showErrorToast(errorMessage)
+      return rejectWithValue(errorMessage)
+    }
+  }
+)
+
+export const fetchPositionHierarchy = createAsyncThunk(
+  "positions/fetchPositionHierarchy", 
+  async (_, { rejectWithValue, getState }) => {
+    try {
+      const token = localStorage.getItem("token")
+      const state = getState() as RootState
+      const organizationId = state.login.user?.organization?.id
+
+      if (!organizationId) {
+        throw new Error("Organization ID is missing")
+      }
+
+      const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/v1/position/${organizationId}/hierarchy`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      return response.data.data
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || "Failed to fetch position hierarchy"
+      showErrorToast(errorMessage)
+      return rejectWithValue(errorMessage)
+    }
+  }
+)
+
 export const createPosition = createAsyncThunk(
   "positions/createPosition",
   async (
     positionData: {
       title: string
-      description: string
+      description?: string
       company_id?: number
       department_id: number
       supervisory_level_id: number
+      direct_supervisor_id?: number
     },
     { rejectWithValue, getState },
   ) => {
@@ -144,6 +230,7 @@ export const updatePosition = createAsyncThunk(
         company_id?: number | null
         department_id?: number | null
         supervisory_level_id?: number | null
+        direct_supervisor_id?: number | null
       }
     },
     { rejectWithValue, getState },

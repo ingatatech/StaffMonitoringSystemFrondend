@@ -30,9 +30,15 @@ import {
   FaImage,
   FaVideo,
   FaMusic,
-  FaExchangeAlt, 
+  FaExchangeAlt,
   FaHistory,
+  FaFilePdf,
+  FaEllipsisV,
+  FaPlus,
+  FaPaperPlane,
+  FaAward
 } from "react-icons/fa"
+import { useNavigate } from "react-router-dom"
 import { MessageSquare } from "lucide-react"
 import { useAppSelector, useAppDispatch } from "../../../Redux/hooks"
 import { fetchDailyTasks, submitDailyTasks } from "../../../Redux/Slices/TaskSlices"
@@ -44,8 +50,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/Card"
 import { Input } from "../../ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
-import ViewTaskModal from "./ViewTaskModal"
-import ReworkModal from "./ReworkModal"
+import ViewTaskModal from "../../Reusable/ViewTaskModal"
 
 interface Comment {
   text: string
@@ -55,13 +60,16 @@ interface Comment {
 }
 
 interface AttachedDocument {
-  secure_url: string
-  public_id: string
-  resource_type: string
-  format: string
-  bytes: number
-  original_filename: string
-  upload_timestamp: string
+  url: string
+  name: string
+  size: number
+  type: string
+  secure_url?: string
+  public_id?: string
+  resource_type?: string
+  format?: string
+  bytes?: number
+  original_filename?: string
 }
 
 export enum ReviewStatus {
@@ -76,11 +84,6 @@ interface Task {
   description: string
   status: string
   due_date: string
-  company_served?: {
-    id: number
-    name?: string
-    tin?: string
-  }
   contribution: string
   reviewed: boolean
   review_status: string
@@ -88,7 +91,6 @@ interface Task {
   achieved_deliverables: string
   comments?: Comment[]
   attached_documents?: AttachedDocument[]
-  // ENHANCEMENT: Add work tracking fields
   workDaysCount?: number
   originalDueDate?: string
   lastShiftedDate?: string
@@ -225,17 +227,28 @@ const CommentsModal: React.FC<{
   )
 }
 
-// Document Display Component
 const DocumentDisplay: React.FC<{ documents: AttachedDocument[] }> = ({ documents }) => {
+  // Filter out empty objects and invalid documents
+  const validDocuments = useMemo(() => {
+    return (documents || []).filter(doc =>
+      doc && (doc.url || doc.secure_url) && (doc.name || doc.original_filename)
+    )
+  }, [documents])
+
   const getFileIcon = (document: AttachedDocument) => {
-    if (document.resource_type === "image") return <FaImage className="text-blue-500" />
-    if (document.resource_type === "video") return <FaVideo className="text-purple-500" />
-    if (document.format === "mp3" || document.format === "wav") return <FaMusic className="text-green-500" />
+    const fileType = document.type || document.resource_type || ''
+
+    if (fileType.includes('image')) return <FaImage className="text-blue-500" />
+    if (fileType.includes('video')) return <FaVideo className="text-purple-500" />
+    if (fileType.includes('audio') || document.format === "mp3" || document.format === "wav") {
+      return <FaMusic className="text-green-500" />
+    }
+    if (fileType.includes('pdf')) return <FaFilePdf className="text-red-500" />
     return <FaFile className="text-gray-500" />
   }
 
   const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
+    if (!bytes || bytes === 0) return "0 Bytes"
     const k = 1024
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -243,10 +256,13 @@ const DocumentDisplay: React.FC<{ documents: AttachedDocument[] }> = ({ document
   }
 
   const handleDownload = (document: AttachedDocument) => {
-    window.open(document.secure_url, "_blank")
+    const downloadUrl = document.url || document.secure_url
+    if (downloadUrl) {
+      window.open(downloadUrl, "_blank")
+    }
   }
 
-  if (!documents || documents.length === 0) {
+  if (!validDocuments || validDocuments.length === 0) {
     return null
   }
 
@@ -255,39 +271,50 @@ const DocumentDisplay: React.FC<{ documents: AttachedDocument[] }> = ({ document
       <div className="flex items-center mb-2">
         <FaPaperclip className="text-gray-400 mr-1" />
         <span className="text-sm font-medium text-gray-700">
-          {documents.length} attachment{documents.length !== 1 ? "s" : ""}
+          {validDocuments.length} attachment{validDocuments.length !== 1 ? "s" : ""}
         </span>
       </div>
       <div className="space-y-1">
-        {documents.map((doc, index) => (
-          <div
-            key={index}
-            className="flex items-center justify-between bg-gray-50 rounded p-2 hover:bg-gray-100 transition-colors"
-          >
-            <div className="flex items-center space-x-2 flex-1 min-w-0">
-              {getFileIcon(doc)}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{doc.original_filename}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(doc.bytes)}</p>
+        {validDocuments.map((doc, index) => {
+          const fileName = doc.name || doc.original_filename || 'Document'
+          const fileSize = doc.size || doc.bytes || 0
+          const fileType = doc.type || doc.resource_type || 'file'
+
+          return (
+            <div
+              key={index}
+              className="flex items-center justify-between bg-gray-50 rounded p-2 hover:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                {getFileIcon(doc)}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{fileName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500">{formatFileSize(fileSize)}</p>
+                    <Badge variant="outline" className="text-xs py-0 px-1.5">
+                      {fileType.split('/').pop()?.toUpperCase() || 'FILE'}
+                    </Badge>
+                  </div>
+                </div>
               </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleDownload(doc)}
+                      className="p-1 text-blue-500 hover:text-blue-700 transition-colors"
+                    >
+                      <FaDownload className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Download {fileName}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => handleDownload(doc)}
-                    className="p-1 text-blue-500 hover:text-blue-700 transition-colors"
-                  >
-                    <FaDownload className="h-3 w-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Download {doc.original_filename}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -374,6 +401,8 @@ const getReviewStatusProps = (status: string) => {
 }
 
 const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
+
+
   const dispatch = useAppDispatch()
   const user = useAppSelector((state) => state.login.user)
   const conversations = useAppSelector((state) => state.chat.conversations)
@@ -383,7 +412,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
-  const [isExpanded, setIsExpanded] = useState(false)
   const [selectedTaskComments, setSelectedTaskComments] = useState<{
     comments: Comment[]
     taskTitle: string
@@ -391,42 +419,84 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
   const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
   const [reworkTask, setReworkTask] = useState<Task | null>(null)
   const [isReworkModalOpen, setIsReworkModalOpen] = useState(false)
-
+  const navigate = useNavigate()
   const tasksPerPage = 5
+  // Add new state for the actions popup
+  const [isActionsPopupOpen, setIsActionsPopupOpen] = useState(false)
 
-  // Early return if no tasks (safety check)
-  if (!dailyTask.tasks || dailyTask.tasks.length === 0) {
-    return null
+  // Calculate statistics for the actions popup
+  const stats = useMemo(() => {
+    let shiftedTasks = 0
+    let submittedTasks = 0
+    let approvedSubmittedTasks = 0
+
+    dailyTask.tasks?.forEach(task => {
+      if (task.isShifted) shiftedTasks++
+      if (task.status === "completed" && dailyTask.submitted) submittedTasks++
+      if (task.status === "completed" && 
+          task.review_status === "approved" && 
+          dailyTask.submitted) {
+        approvedSubmittedTasks++
+      }
+    })
+
+    return {
+      shiftedTasks,
+      submittedTasks,
+      approvedSubmittedTasks
+    }
+  }, [dailyTask.tasks, dailyTask.submitted])
+
+  // Toggle actions popup
+  const toggleActionsPopup = () => {
+    setIsActionsPopupOpen(!isActionsPopupOpen)
   }
 
   // Date calculations
   const today = new Date().toISOString().split("T")[0]
-
-  // Safely parse the submission date
   const submissionDate = new Date(dailyTask.submission_date)
   const submissionDateStr = isNaN(submissionDate.getTime())
-    ? today // Fallback to today if invalid date
+    ? today
     : submissionDate.toISOString().split("T")[0]
 
   const isToday = submissionDateStr === today
+  const isPastDate = submissionDateStr < today
 
-  // Check if any tasks are in progress
-  const hasInProgressTasks = dailyTask.tasks.some(task => task.status === "in_progress")
-  // Check if we have at least one completed task
+  const filteredDailyTasks = useMemo(() => {
+
+    if (!dailyTask.tasks || dailyTask.tasks.length === 0) {
+      return []
+    }
+
+    const filtered = dailyTask.tasks.filter((task) => {
+      const isCompleted = task.status === "completed"
+      const isApproved = task.review_status === "approved"
+      const isCompletedAndApproved = isCompleted && isApproved
+      
+      // MAIN CONDITION: Show tasks that are:
+      // 1. NOT completed, OR
+      // 2. Completed but daily tasks NOT submitted yet, OR  
+      // 3. Completed but NOT approved (pending/rejected review status)
+      const shouldShow = !isCompleted || !dailyTask.submitted || !isApproved
+
+      return shouldShow
+    })
+
+    return filtered
+  }, [dailyTask.tasks, dailyTask.id, dailyTask.submitted]) // Added dailyTask.submitted as dependency
+
+  const hasInProgressTasks = filteredDailyTasks.some(task => task.status === "in_progress")
   const hasCompletedTask = dailyTask.tasks.some(task => task.status === "completed")
 
-  // Chat functionality similar to TaskList
+
   const handleOpenTaskChat = (task: Task, userId?: number, userName?: string) => {
-    // Use the task owner's info if provided, otherwise use current user info
     const targetUserId = userId || user?.id
     const targetUserName = userName || user?.username
 
     if (!targetUserId || !targetUserName) {
-      console.warn("Cannot open task chat: missing user information")
       return
     }
 
-    // Store task context in localStorage with autoOpen flag
     localStorage.setItem(
       "taskChatContext",
       JSON.stringify({
@@ -439,18 +509,8 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
       }),
     )
 
-    // Find any existing conversation with this user
     const existingConversations = conversations.filter((conv) => conv.otherUser.id === targetUserId)
 
-    // Log for debugging
-    console.log("Opening task chat:", {
-      taskId: task.id,
-      taskTitle: task.title,
-      userId: targetUserId,
-      existingConversations: existingConversations.length,
-    })
-
-    // Open the chat modal
     dispatch(toggleChat())
   }
 
@@ -479,36 +539,34 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
     setReworkTask(null)
   }
 
-  // Filter and paginate tasks
-  const filteredTasks = useMemo(() => {
-    return dailyTask.tasks.filter((task) => {
+  // Filter and paginate tasks (using filtered tasks)
+  const searchAndStatusFilteredTasks = useMemo(() => {
+    return filteredDailyTasks.filter((task) => {
       const matchesSearch =
         task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        task.company_served?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         task.related_project.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesStatus = statusFilter ? task.status === statusFilter : true
 
       return matchesSearch && matchesStatus
     })
-  }, [dailyTask.tasks, searchTerm, statusFilter])
+  }, [filteredDailyTasks, searchTerm, statusFilter])
 
-  const totalPages = Math.ceil(filteredTasks.length / tasksPerPage)
+  const totalPages = Math.ceil(searchAndStatusFilteredTasks.length / tasksPerPage)
   const paginatedTasks = useMemo(() => {
     const startIndex = (currentPage - 1) * tasksPerPage
-    return filteredTasks.slice(startIndex, startIndex + tasksPerPage)
-  }, [filteredTasks, currentPage])
+    return searchAndStatusFilteredTasks.slice(startIndex, startIndex + tasksPerPage)
+  }, [searchAndStatusFilteredTasks, currentPage])
 
   const handleSubmit = async () => {
     if (!user) return
-    
-    // Check if we have at least one completed task
+
     if (!hasCompletedTask) {
       alert("You need to have at least one completed task to submit your daily tasks.")
       return
     }
-    
+
     setIsSubmitting(true)
     try {
       await dispatch(
@@ -535,27 +593,42 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
     return "bg-green text-white hover:bg-green-600"
   }
 
-  // Task detail handlers
+  const closeTaskDetail = () => {
+    setIsDetailOpen(false)
+    setSelectedTask(null)
+  }
+
   const openTaskDetail = (task: Task) => {
-    setSelectedTask(task)
+    const taskWithUser = {
+      ...task,
+      user: dailyTask.user
+    }
+    setSelectedTask(taskWithUser)
     setIsDetailOpen(true)
   }
 
-  // Status counts for summary
+  // Status counts for summary (using filtered tasks)
   const statusCounts = useMemo(() => {
-    return dailyTask.tasks.reduce(
+    return filteredDailyTasks.reduce(
       (counts, task) => {
         counts[task.status] = (counts[task.status] || 0) + 1
         return counts
       },
       {} as Record<string, number>,
     )
-  }, [dailyTask.tasks])
+  }, [filteredDailyTasks])
 
-  // ENHANCEMENT: Count shifted tasks
+  // Count shifted tasks (using filtered tasks)
   const shiftedTasksCount = useMemo(() => {
-    return dailyTask.tasks.filter((task) => task.isShifted).length
-  }, [dailyTask.tasks])
+    return filteredDailyTasks.filter((task) => task.isShifted).length
+  }, [filteredDailyTasks])
+
+
+
+  // Only render if there are filtered tasks to show
+  if (filteredDailyTasks.length === 0) {
+    return null
+  }
 
   return (
     <motion.div
@@ -564,9 +637,9 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
       transition={{ duration: 0.5 }}
       className="bg-white rounded-lg shadow-lg mb-8"
     >
-      {/* Card Header with Summary */}
+
       <Card>
-        <CardHeader className="pb-2 border-b">
+        <CardHeader className="pb-4 border-b">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <CardTitle className="flex items-center text-xl sm:text-2xl font-bold text-gray-800">
@@ -574,19 +647,25 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                 {isNaN(submissionDate.getTime())
                   ? "Invalid Date"
                   : submissionDate.toLocaleDateString("en-US", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
               </CardTitle>
               <div className="flex flex-wrap gap-2 mt-2">
                 <Badge variant="outline" className="bg-blue/10 text-blue border-blue">
-                  <FaTasks className="mr-1" /> {dailyTask.tasks.length} Tasks
+                  <FaTasks className="mr-1" /> {filteredDailyTasks.length} Active Tasks
                 </Badge>
                 {statusCounts.completed && (
-                  <Badge variant="outline" className="bg-green/10 text-green border-green">
-                    <FaCheckCircle className="mr-1" /> {statusCounts.completed} Completed
+                  <Badge 
+                    variant="outline" 
+                    className={`${!dailyTask.submitted 
+                      ? "bg-yellow/10 text-yellow border-yellow" 
+                      : "bg-green/10 text-green border-green"}`}
+                  >
+                    <FaCheckCircle className="mr-1" /> 
+                    {statusCounts.completed} Completed{!dailyTask.submitted ? " (Not Submitted)" : ""}
                   </Badge>
                 )}
                 {statusCounts.in_progress && (
@@ -599,7 +678,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                     <FaExclamationCircle className="mr-1" /> {statusCounts.delayed} Delayed
                   </Badge>
                 )}
-                {/* ENHANCEMENT: Show shifted tasks count */}
                 {shiftedTasksCount > 0 && (
                   <Badge variant="outline" className="bg-orange/10 text-orange border-orange">
                     <FaExchangeAlt className="mr-1" /> {shiftedTasksCount} Shifted
@@ -610,383 +688,442 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
                     <FaCheck className="mr-1" /> Submitted
                   </Badge>
                 )}
+
               </div>
+
             </div>
-            <Button
-              onClick={() => setIsExpanded(!isExpanded)}
-              variant="outline"
-              className="text-blue border-blue hover:bg-blue/10"
-            >
-              {isExpanded ? "Collapse" : "Expand"} Details
-              {isExpanded ? <FaChevronUp className="ml-2" /> : <FaChevronDown className="ml-2" />}
-            </Button>
+              <div className="relative">
+                <Button
+                  onClick={toggleActionsPopup}
+                  variant="outline"
+                  className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100"
+                >
+                  <span>More Actions</span>
+                  <FaEllipsisV className="h-4 w-4" />
+                </Button>
+                <AnimatePresence>
+                  {isActionsPopupOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xl z-50 border border-gray-200"
+                    >
+                      <div className="p-2 space-y-2">
+                        {/* Create Task Button */}
+                        <Button
+                          onClick={() => {
+                            navigate("/employeeDashboard/tasks/create")
+                            setIsActionsPopupOpen(false)
+                          }}
+                          className="w-full flex items-center justify-between bg-blue-50 hover:bg-blue-100 text-blue-600"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="bg-blue-100 p-2 rounded-lg">
+                              <FaPlus className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <span>Create Task</span>
+                          </div>
+                          <span className="text-xs text-blue-400">New</span>
+                        </Button>
+                        
+                        {/* Shifted Tasks Button */}
+                        <Button
+                          onClick={() => {
+                            navigate("/employeeDashboard/shifted-task")
+                            setIsActionsPopupOpen(false)
+                          }}
+                          className="w-full flex items-center justify-between bg-orange-50 hover:bg-orange-100 text-orange-600"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="bg-orange-100 p-2 rounded-lg">
+                              <FaExchangeAlt className="h-4 w-4 text-orange-600" />
+                            </div>
+                            <span>Shifted Tasks</span>
+                          </div>
+                          {stats.shiftedTasks > 0 && (
+                            <Badge variant="outline" className="bg-orange-100 text-orange-600 border-orange-200">
+                              {stats.shiftedTasks}
+                            </Badge>
+                          )}
+                        </Button>
+                        
+                        {/* Submitted & Approved Button */}
+                        <Button
+                          onClick={() => {
+                            navigate("/employeeDashboard/submitted-task")
+                            setIsActionsPopupOpen(false)
+                          }}
+                          className="w-full flex items-center justify-between bg-green-50 hover:bg-green-100 text-green-600"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="bg-green-100 p-2 rounded-lg relative">
+                              <FaPaperPlane className="h-4 w-4 text-green-600" />
+                              <FaAward className="absolute -top-1 -right-1 text-yellow-400 text-xs" />
+                            </div>
+                            <span>Submitted & Approved</span>
+                          </div>
+                          {stats.approvedSubmittedTasks > 0 && (
+                            <Badge variant="outline" className="bg-green-100 text-green-600 border-green-200">
+                              {stats.approvedSubmittedTasks}
+                            </Badge>
+                          )}
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+               </div>
           </div>
         </CardHeader>
 
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <CardContent className="pt-4">
-                {/* Search and Filter Controls */}
-                <div className="flex flex-col md:flex-row gap-4 mb-4">
-                  <div className="relative flex-1">
-                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <Input
-                      type="text"
-                      placeholder="Search tasks..."
-                      value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value)
-                        setCurrentPage(1) // Reset to first page on search
-                      }}
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="w-full md:w-48">
-                    <div className="flex items-center">
-                      <FaFilter className="mr-2 text-gray-400" />
-                      <Select
-                        value={statusFilter}
-                        onValueChange={(value) => {
-                          setStatusFilter(value)
-                          setCurrentPage(1) // Reset to first page on filter
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Filter by status" />
-                        </SelectTrigger>
-                        <SelectContent className="w-full bg-white">
-                          <SelectItem value="all">All Statuses</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="in_progress">In Progress</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tasks Table */}
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[50px]">#</TableHead>
-                        <TableHead>Task Details</TableHead>
-                        <TableHead>Company</TableHead>
-                        <TableHead>Project</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Review</TableHead>
-                        {/* ENHANCEMENT: Add Work Days column */}
-                        <TableHead>Work Days</TableHead>
-                        <TableHead className="w-[220px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedTasks.length > 0 ? (
-                        paginatedTasks.map((task, index) => (
-                          <TableRow key={task.id} className="hover:bg-gray-50 transition-colors">
-                            <TableCell className="font-medium">
-                              {(currentPage - 1) * tasksPerPage + index + 1}
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-semibold">{task.title}</p>
-                                  {/* ENHANCEMENT: Show shift indicator */}
-                                  {task.isShifted && (
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Badge variant="outline" className="bg-orange/10 text-orange border-orange">
-                                            <FaExchangeAlt className="mr-1 h-3 w-3" />
-                                            Shifted
-                                          </Badge>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          <p>This task was shifted from a previous day</p>
-                                          {task.originalDueDate && (
-                                            <p>Original date: {new Date(task.originalDueDate).toLocaleDateString()}</p>
-                                          )}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  )}
-                                </div>
-                                <TruncatedContent content={task.description} maxLength={50} />
-                                {/* Display attached documents */}
-                                <DocumentDisplay documents={task.attached_documents || []} />
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="flex items-center">
-                                      <FaBuilding className="mr-2 text-gray-500" />
-                                      <span className="truncate max-w-[120px]">
-                                        <p>{task.company_served?.name || "N/A"}</p>
-                                      </span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{task.company_served?.name}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </TableCell>
-                            <TableCell>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="flex items-center">
-                                      <FaProjectDiagram className="mr-2 text-gray-500" />
-                                      <span className="truncate max-w-[120px]">{task.related_project}</span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{task.related_project}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className={`${getStatusColor(task.status)}`}>
-                                <span className="flex items-center">
-                                  {getStatusIcon(task.status)}
-                                  <span className="ml-1 capitalize">{task.status}</span>
-                                </span>
+        <CardContent className="pt-4">
+          {/* Search and Filter Controls */}
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="relative flex-1">
+              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  setCurrentPage(1)
+                }}
+                className="pl-10"
+              />
+            </div>
+            <div className="w-full md:w-48">
+              <div className="flex items-center">
+                <FaFilter className="mr-2 text-gray-400" />
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value)
+                    setCurrentPage(1)
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent className="w-full bg-white">
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          {/* Tasks Table */}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">#</TableHead>
+                  <TableHead>Task Title</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Review</TableHead>
+                  <TableHead>Work Days</TableHead>
+                  <TableHead className="w-[220px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedTasks.length > 0 ? (
+                  paginatedTasks.map((task, index) => (
+                    <TableRow key={task.id} className="hover:bg-gray-50 transition-colors">
+                      <TableCell className="font-medium">
+                        {(currentPage - 1) * tasksPerPage + index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold">{task.title}</p>
+                            {/* Show special indicators for today's completed tasks */}
+                            {isToday && task.status === "completed" && !dailyTask.submitted && (
+                              <Badge variant="outline" className="bg-yellow/10 text-yellow border-yellow text-xs">
+                                Not Submitted
                               </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {(() => {
-                                const { color, label, icon } = getReviewStatusProps(task.review_status)
-                                return (
-                                  <span
-                                    className={`inline-flex items-center font-medium rounded px-2 py-1 border ${color}`}
-                                  >
-                                    {icon}
-                                    <span className="text-sm">{label}</span>
-                                  </span>
-                                )
-                              })()}
-                            </TableCell>
-                            {/* ENHANCEMENT: Work Days column */}
-                            <TableCell>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`flex items-center whitespace-nowrap gap-1 px-2 py-1 ${getStatusColor(task.status)}`}
+                        >
+                          {getStatusIcon(task.status)}
+                          <span className="capitalize">{task.status.replace(/_/g, ' ')}</span>
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>
+                        {(() => {
+                          const { color, label, icon } = getReviewStatusProps(task.review_status)
+                          return (
+                            <span
+                              className={`inline-flex items-center font-medium rounded px-2 py-1 border ${color}`}
+                            >
+                              {icon}
+                              <span className="text-sm">{label}</span>
+                            </span>
+                          )
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className="flex items-center gap-1 bg-purple/10 text-purple border-purple whitespace-nowrap"
+                              >
+                                <FaHistory className="h-3 w-3" />
+                                {task.workDaysCount || 0} day{(task.workDaysCount || 0) !== 1 ? "s" : ""}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-white text-gray-700">
+                              <p>Days worked on this task</p>
+                              {task.originalDueDate && task.originalDueDate !== task.due_date && (
+                                <p>Original date: {new Date(task.originalDueDate).toLocaleDateString()}</p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => openTaskDetail(task)}
+                            size="sm"
+                            className="bg-blue text-white hover:bg-blue-600"
+                          >
+                            View
+                          </Button>
+
+                          {(task.review_status === ReviewStatus.REJECTED ||
+                            task.isShifted ||
+                            task.status === "in_progress") && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="bg-purple/10 text-purple border-purple">
-                                      <FaHistory className="mr-1 h-3 w-3" />
-                                      {task.workDaysCount || 0} day{(task.workDaysCount || 0) !== 1 ? "s" : ""}
-                                    </Badge>
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        navigate("/employeeDashboard/create-task", {
+                                          state: {
+                                            mode: "rework",
+                                            taskData: task
+                                          }
+                                        })
+                                      }}
+                                      size="sm"
+                                      className={`p-2 ${task.review_status === ReviewStatus.REJECTED
+                                        ? "bg-red-500 hover:bg-red-600"
+                                        : task.isShifted
+                                          ? "bg-orange-500 hover:bg-orange-600"
+                                          : "bg-blue-500 hover:bg-blue-600"
+                                        } text-white`}
+                                      aria-label={
+                                        task.review_status === ReviewStatus.REJECTED
+                                          ? "Rework rejected task"
+                                          : task.isShifted
+                                            ? "Rework shifted task"
+                                            : "Rework in progress task"
+                                      }
+                                    >
+                                      <FaRedo className="h-3 w-3" />
+                                    </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Days worked on this task</p>
-                                    {task.originalDueDate && task.originalDueDate !== task.due_date && (
-                                      <p>Original date: {new Date(task.originalDueDate).toLocaleDateString()}</p>
-                                    )}
+                                  <TooltipContent className="bg-white text-gray-700">
+                                    <p>
+                                      {task.review_status === ReviewStatus.REJECTED
+                                        ? "Rework rejected task"
+                                        : task.isShifted
+                                          ? "Rework shifted task"
+                                          : "Rework in progress task"}
+                                    </p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
+                            )}
+
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
                                 <Button
-                                  onClick={() => openTaskDetail(task)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleOpenTaskChat(
+                                      task,
+                                      dailyTask.user?.id || user?.id,
+                                      dailyTask.user?.username || user?.username,
+                                    )
+                                  }}
                                   size="sm"
-                                  className="bg-blue text-white hover:bg-blue-600"
+                                  className="bg-green text-white hover:bg-green-600 p-2"
+                                  aria-label="Chat about task"
                                 >
-                                  View
+                                  <MessageSquare className="h-4 w-4" />
                                 </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-white text-gray-700">
+                                <p>Chat about this task</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
 
-                                {/* ENHANCEMENT: Conditional Rework Button for both rejected AND shifted tasks */}
-                                {(task.review_status === ReviewStatus.REJECTED || task.isShifted) && (
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleOpenRework(task)
-                                          }}
-                                          size="sm"
-                                          className="bg-orange-500 text-white hover:bg-orange-600 p-2"
-                                          aria-label="Rework task"
-                                        >
-                                          <FaRedo className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>
-                                          Rework this{" "}
-                                          {task.review_status === ReviewStatus.REJECTED ? "rejected" : "shifted"} task
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                )}
-
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleOpenTaskChat(
-                                            task,
-                                            dailyTask.user?.id || user?.id,
-                                            dailyTask.user?.username || user?.username,
-                                          )
-                                        }}
-                                        size="sm"
-                                        className="bg-green text-white hover:bg-green-600 p-2"
-                                        aria-label="Chat about task"
-                                      >
-                                        <MessageSquare className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Chat about this task</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleOpenComments(task)
-                                        }}
-                                        size="sm"
-                                        className="bg-purple-500 text-white hover:bg-purple-600 p-2 relative"
-                                        aria-label="View task comments"
-                                      >
-                                        <FaComments className="h-4 w-4" />
-                                        {task.comments && task.comments.length > 0 && (
-                                          <span className="absolute -top-1 -right-1 bg-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                                            {task.comments.length}
-                                          </span>
-                                        )}
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>
-                                        {task.comments && task.comments.length > 0
-                                          ? `View ${task.comments.length} comment${
-                                              task.comments.length !== 1 ? "s" : ""
-                                            }`
-                                          : "No comments"}
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-4 text-gray-500">
-                            No tasks found matching your criteria
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Pagination Controls */}
-                {filteredTasks.length > tasksPerPage && (
-                  <div className="flex justify-between items-center mt-4">
-                    <div className="text-sm text-gray-500">
-                      Showing {Math.min(filteredTasks.length, (currentPage - 1) * tasksPerPage + 1)} to{" "}
-                      {Math.min(filteredTasks.length, currentPage * tasksPerPage)} of {filteredTasks.length} tasks
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1}
-                        size="sm"
-                        variant="outline"
-                        className="px-2"
-                      >
-                        <FaAngleLeft />
-                      </Button>
-                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                        // Show pages around current page
-                        let pageNum = i + 1
-                        if (totalPages > 5) {
-                          if (currentPage > 3) {
-                            pageNum = currentPage - 3 + i
-                          }
-                          if (currentPage > totalPages - 2) {
-                            pageNum = totalPages - 4 + i
-                          }
-                        }
-                        if (pageNum <= totalPages) {
-                          return (
-                            <Button
-                              key={pageNum}
-                              onClick={() => setCurrentPage(pageNum)}
-                              variant={currentPage === pageNum ? "default" : "outline"}
-                              size="sm"
-                              className={currentPage === pageNum ? "bg-blue text-white" : ""}
-                            >
-                              {pageNum}
-                            </Button>
-                          )
-                        }
-                        return null
-                      })}
-                      <Button
-                        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                        disabled={currentPage === totalPages}
-                        size="sm"
-                        variant="outline"
-                        className="px-2"
-                      >
-                        <FaAngleRight />
-                      </Button>
-                    </div>
-                  </div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleOpenComments(task)
+                                  }}
+                                  size="sm"
+                                  className="bg-purple-500 text-white hover:bg-purple-600 p-2 relative"
+                                  aria-label="View task comments"
+                                >
+                                  <FaComments className="h-4 w-4" />
+                                  {task.comments && task.comments.length > 0 && (
+                                    <span className="absolute -top-1 -right-1 bg-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                                      {task.comments.length}
+                                    </span>
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-white text-gray-700">
+                                <p>
+                                  {task.comments && task.comments.length > 0
+                                    ? `View ${task.comments.length} comment${task.comments.length !== 1 ? "s" : ""
+                                    }`
+                                    : "No comments"}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-4 text-gray-500">
+                      No tasks found matching your criteria
+                    </TableCell>
+                  </TableRow>
                 )}
+              </TableBody>
+            </Table>
+          </div>
 
-                {/* Submit Button */}
-                <div className="mt-6 flex justify-end">
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={ dailyTask.submitted || isSubmitting || !hasCompletedTask}
-                    className={`${getButtonColor()} transition-colors duration-300`}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <FaSpinner className="animate-spin mr-2" />
-                        Submitting...
-                      </>
-                    ) : dailyTask.submitted ? (
-                      <>
-                        <FaCheck className="mr-2" />
-                        Submitted
-                      </>
-                    ) : (
-                      getButtonText()
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </motion.div>
+          {/* Pagination Controls */}
+          {searchAndStatusFilteredTasks.length > tasksPerPage && (
+            <div className="flex justify-between items-center mt-4">
+              <div className="text-sm text-gray-500">
+                Showing {Math.min(searchAndStatusFilteredTasks.length, (currentPage - 1) * tasksPerPage + 1)} to{" "}
+                {Math.min(searchAndStatusFilteredTasks.length, currentPage * tasksPerPage)} of {searchAndStatusFilteredTasks.length} tasks
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  size="sm"
+                  variant="outline"
+                  className="px-2"
+                >
+                  <FaAngleLeft />
+                </Button>
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  let pageNum = i + 1
+                  if (totalPages > 5) {
+                    if (currentPage > 3) {
+                      pageNum = currentPage - 3 + i
+                    }
+                    if (currentPage > totalPages - 2) {
+                      pageNum = totalPages - 4 + i
+                    }
+                  }
+                  if (pageNum <= totalPages) {
+                    return (
+                      <Button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        className={currentPage === pageNum ? "bg-blue text-white" : ""}
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  }
+                  return null
+                })}
+                <Button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  size="sm"
+                  variant="outline"
+                  className="px-2"
+                >
+                  <FaAngleRight />
+                </Button>
+              </div>
+            </div>
           )}
-        </AnimatePresence>
+
+          {/* Submit Button Section */}
+          <div className="mt-6 flex flex-col items-end gap-2">
+            {hasCompletedTask && !dailyTask.submitted && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 w-full max-w-md">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <FaExclamationCircle className="h-5 w-5 text-yellow-400" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-yellow-700">
+                      Only completed tasks will be visible to your supervisor after submission.
+                      In-progress tasks will remain in your task list.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={handleSubmit}
+              disabled={dailyTask.submitted || isSubmitting || !hasCompletedTask}
+              className={`${getButtonColor()} transition-colors duration-300`}
+            >
+              {isSubmitting ? (
+                <>
+                  <FaSpinner className="animate-spin mr-2" />
+                  Submitting...
+                </>
+              ) : dailyTask.submitted ? (
+                <>
+                  <FaCheck className="mr-2" />
+                  Submitted
+                </>
+              ) : (
+                getButtonText()
+              )}
+            </Button>
+          </div>
+        </CardContent>
       </Card>
 
-      {/* Comments Modal */}
+      <ViewTaskModal
+        task={selectedTask}
+        isOpen={isDetailOpen}
+        onClose={closeTaskDetail}
+      />
+
       <CommentsModal
         isOpen={isCommentsModalOpen}
         onClose={handleCloseComments}
@@ -994,8 +1131,6 @@ const DailyTaskGroup: React.FC<DailyTaskGroupProps> = ({ dailyTask }) => {
         taskTitle={selectedTaskComments?.taskTitle || ""}
       />
 
-      {/* Rework Modal */}
-      <ReworkModal isOpen={isReworkModalOpen} onClose={handleCloseRework} task={reworkTask} />
     </motion.div>
   )
 }

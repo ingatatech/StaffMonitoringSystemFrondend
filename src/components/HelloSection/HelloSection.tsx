@@ -63,11 +63,7 @@ const HelloSection: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-12 grid grid-cols-3 gap-6">
-                <Statistic label="Active Users" value="10K+" />
-                <Statistic label="Tasks Tracked" value="1M+" />
-                <Statistic label="Efficiency Gain" value="35%" />
-              </div>
+
             </motion.div>
 
             <motion.div

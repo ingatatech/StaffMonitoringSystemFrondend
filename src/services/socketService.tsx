@@ -46,14 +46,11 @@ export const initializeSocket = (userId: number, organizationId: number) => {
       // Authenticate user
       socket.emit("authenticate", { userId, organizationId }, (response: any) => {
         if (response && response.success) {
-          console.log("Socket authentication successful")
         } else {
-          console.error("Socket authentication failed:", response?.error || "Unknown error")
           showErrorToast("Failed to connect to chat server")
         }
       })
     } catch (error) {
-      console.error("Socket connection error:", error)
       showErrorToast("Failed to connect to chat server")
     }
   }
@@ -66,12 +63,10 @@ export const disconnectSocket = () => {
       socket.emit("disconnect_user")
       socket.disconnect()
     } catch (error) {
-      console.error("Socket disconnection error:", error)
     }
   }
 }
 
-// ONLY USE SOCKET FOR SENDING MESSAGES - NO HTTP FALLBACK
 export const sendMessage = (
   conversationId: string,
   receiverId: number,
@@ -84,7 +79,6 @@ export const sendMessage = (
 ) => {
   return new Promise((resolve, reject) => {
     if (!socket.connected) {
-      console.error("Socket not connected, attempting to reconnect...")
       try {
         socket.connect()
         setTimeout(() => {
@@ -122,11 +116,9 @@ export const sendMessage = (
           replyToMessageId: replyToMessageId || undefined,
         }
 
-        console.log("Sending message payload:", messagePayload)
 
         socket.emit("send_message", messagePayload, (response: any) => {
           if (response?.success) {
-            console.log("Message sent successfully:", response)
             // Dispatch to Redux store for immediate UI update
             store.dispatch(
               receiveMessage({
@@ -142,6 +134,11 @@ export const sendMessage = (
                   id: receiverId,
                   name: "",
                 },
+                reply_to: response.data?.reply_to || (replyToMessageId ? {
+                  id: replyToMessageId,
+                  content: store.getState().chat.replyingTo?.content || "",
+                  sender: store.getState().chat.replyingTo?.sender || { id: 0, name: "" }
+                } : undefined),
                 task: taskId
                   ? {
                       id: taskId,
@@ -149,24 +146,16 @@ export const sendMessage = (
                       description: taskDescription || "",
                     }
                   : null,
-                reply_to: replyToMessageId
-                  ? {
-                      id: replyToMessageId,
-                      content: store.getState().chat.replyingTo?.content || "",
-                    }
-                  : undefined,
               }),
             )
             // Clear the reply after sending
             store.dispatch(clearReplyingTo())
             resolve(response)
           } else {
-            console.error("Message send failed:", response?.error || "Unknown error")
             handleSendError(response, retryCount)
           }
         })
       } catch (error) {
-        console.error("Error in sendMessageWithSocket:", error)
         reject(error)
       }
     }
@@ -174,7 +163,6 @@ export const sendMessage = (
     function handleSendError(response: any, retryCount: number) {
       const errorMsg = response?.error || "Failed to send message"
       if (retryCount < 2) {
-        console.log(`Retrying message send (attempt ${retryCount + 1})...`)
         setTimeout(() => sendMessageWithSocket(retryCount + 1), 1000)
       } else {
         reject(errorMsg)
@@ -184,38 +172,26 @@ export const sendMessage = (
 }
 
 const setupSocketListeners = () => {
-  // Connection events
-  socket.on("connect", () => {
-    console.log("Socket connected:", socket.id)
-  })
 
-  socket.on("disconnect", () => {
-    console.log("Socket disconnected")
-  })
 
   socket.on("connect_error", (error) => {
-    console.error("Socket connection error:", error)
     showErrorToast("Chat connection error. Please try again.")
   })
 
   socket.on("new_message", (message) => {
     if (message && message.conversationId) {
       store.dispatch(receiveMessage(message))
-    } else {
-      console.error("Received invalid message format:", message)
     }
   })
 
   socket.on("user_typing", (data) => {
     if (data && data.userId && data.conversationId) {
-      console.log("User typing:", data) // Added logging for debugging
       store.dispatch(setUserTyping(data))
     }
   })
 
   socket.on("user_stop_typing", (data) => {
     if (data && data.userId && data.conversationId) {
-      console.log("User stopped typing:", data) // Added logging for debugging
       store.dispatch(clearUserTyping(data))
     }
   })
@@ -273,7 +249,6 @@ export const replyToMessage = (
         },
       )
     } catch (error) {
-      console.error("Error sending reply:", error)
       showErrorToast("Failed to send reply")
       reject(error)
     }
@@ -307,21 +282,12 @@ export const createConversation = (
     }
 
     try {
-      console.log("Creating conversation with payload:", {
-        senderId,
-        receiverId,
-        initialMessage,
-        dailyTaskId,
-        title,
-        taskId,
-        taskTitle,
-      })
+
 
       socket.emit(
         "create_conversation",
         { senderId, receiverId, initialMessage, dailyTaskId, title, taskId, taskTitle },
         (response: ConversationResult) => {
-          console.log("Backend response for createConversation:", response) // Debug log
 
           if (response && response.success && response.conversationId) {
             // Ensure we have all the necessary data
@@ -331,18 +297,15 @@ export const createConversation = (
               taskId,
               taskTitle,
             }
-            console.log("Resolving createConversation with:", result)
             resolve(result)
           } else {
             const errorMsg = response?.error || "Failed to create conversation"
-            console.error("Server returned error:", errorMsg)
             showErrorToast(errorMsg)
             reject(errorMsg)
           }
         },
       )
     } catch (error) {
-      console.error("Error creating conversation:", error)
       showErrorToast("Failed to create conversation")
       reject("Failed to create conversation")
     }
@@ -353,7 +316,6 @@ export const createConversation = (
 export const joinConversation = (conversationId: string) => {
   return new Promise((resolve, reject) => {
     if (!socket.connected) {
-      console.log("Socket not connected, attempting to reconnect...")
 
       try {
         socket.connect()
@@ -369,7 +331,6 @@ export const joinConversation = (conversationId: string) => {
           }
         }, 1000)
       } catch (error) {
-        console.error("Error connecting socket:", error)
         showErrorToast("Failed to connect to chat server")
         reject("Failed to connect to chat server")
       }
@@ -389,10 +350,8 @@ function joinWithAuth(conversationId: string, resolve: Function, reject: Functio
   const organizationId = currentUser?.organization?.id
 
   if (!userId || !organizationId) {
-    console.error("User not authenticated or missing organization")
 
     if (retryCount < 2) {
-      console.log(`Retrying join with auth (attempt ${retryCount + 1})...`)
       setTimeout(() => joinWithAuth(conversationId, resolve, reject, retryCount + 1), 1000)
       return
     }
@@ -402,26 +361,20 @@ function joinWithAuth(conversationId: string, resolve: Function, reject: Functio
     return
   }
 
-  console.log("Attempting to join conversation:", conversationId, "with user:", userId)
 
   // Re-authenticate before joining to ensure we have a valid session
   socket.emit("authenticate", { userId, organizationId }, (authResponse: any) => {
     if (authResponse && authResponse.success) {
-      console.log("Re-authentication successful, now joining conversation")
 
       // Now join the conversation
       socket.emit("join_conversation", conversationId, (response: any) => {
-        console.log("Join conversation response:", response)
 
         if (response && response.success) {
-          console.log("Successfully joined conversation:", conversationId)
           resolve(response)
         } else {
-          console.error("Failed to join conversation:", response?.error || "Unknown error")
 
           // If we get a specific error about authentication, try to re-authenticate
           if (response?.error?.includes("authenticated") && retryCount < 2) {
-            console.log(`Retrying join after auth error (attempt ${retryCount + 1})...`)
             setTimeout(() => joinWithAuth(conversationId, resolve, reject, retryCount + 1), 1000)
           } else {
             const errorMsg = response?.error || "Failed to join conversation"
@@ -431,10 +384,8 @@ function joinWithAuth(conversationId: string, resolve: Function, reject: Functio
         }
       })
     } else {
-      console.error("Socket re-authentication failed:", authResponse?.error || "Unknown error")
 
       if (retryCount < 2) {
-        console.log(`Retrying authentication (attempt ${retryCount + 1})...`)
         setTimeout(() => joinWithAuth(conversationId, resolve, reject, retryCount + 1), 1000)
       } else {
         showErrorToast("Authentication error. Please refresh the page.")
@@ -450,7 +401,6 @@ export const sendTypingIndicator = (conversationId: string, receiverId: number) 
     try {
       socket.emit("typing", { conversationId, receiverId })
     } catch (error) {
-      console.error("Error sending typing indicator:", error)
     }
   }
 }
@@ -461,7 +411,6 @@ export const sendStopTypingIndicator = (conversationId: string, receiverId: numb
     try {
       socket.emit("stop_typing", { conversationId, receiverId })
     } catch (error) {
-      console.error("Error sending stop typing indicator:", error)
     }
   }
 }

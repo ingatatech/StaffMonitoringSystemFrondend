@@ -5,7 +5,7 @@
 import React from "react";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import axios from "axios";
 import {
   fetchAllDepartments,
@@ -19,7 +19,7 @@ import {
   type Department,
 } from "../../../../Redux/Slices/manageDepartmentSlice";
 import type { AppDispatch, RootState } from "../../../../Redux/store";
-import { Card, CardContent, CardHeader } from "../../../ui/Card";
+import { Card } from "../../../ui/Card";
 import { Button } from "../../../ui/button";
 import { Input } from "../../../ui/input";
 import {
@@ -36,6 +36,15 @@ import {
   ChevronDown,
   Loader,
   ListChecks,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  FileText,
+  BarChart2,
 } from "lucide-react";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import * as Yup from "yup";
@@ -58,8 +67,9 @@ import {
   TableRow,
 } from "../../../ui/table";
 import { Dialog, DialogContent } from "../../../ui/dialog";
-import Loader2 from "../../../ui/Loader"; // Import Loader
+import Loader2 from "../../../ui/Loader";
 import { fetchUsers } from "../../../../Redux/Slices/ManageUserSlice";
+
 const validationSchema = Yup.object().shape({
   name: Yup.string().required("Department name is required"),
   company_id: Yup.number().nullable(),
@@ -75,6 +85,64 @@ interface ICompany {
   id: number;
   name: string;
 }
+
+const DepartmentStatsCard: React.FC<{
+  title: string;
+  value: number | string;
+  subtitle: string;
+  icon: React.ReactNode;
+  bgGradient: string;
+  textColor: string;
+  loading?: boolean;
+}> = ({ title, value, subtitle, icon, bgGradient, textColor, loading = false }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      whileHover={{ scale: 1.02, y: -2 }}
+    >
+      <Card className={`${bgGradient} border-0 shadow-lg hover:shadow-xl transition-all duration-300 h-28`}>
+        <div className="h-full flex items-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-white/10 opacity-20"></div>
+          <div className="absolute -top-2 -right-2 w-8 h-8 bg-white/10 rounded-full"></div>
+
+          <div className="flex items-center justify-between w-full h-full relative z-10 px-4">
+            <div className="bg-white/20 p-3 rounded-lg backdrop-blur-sm flex-shrink-0">
+              <motion.div
+                className={`${textColor} text-lg`}
+                whileHover={{ rotate: 360 }}
+                transition={{ duration: 0.6 }}
+              >
+                {icon}
+              </motion.div>
+            </div>
+
+            <div className="flex-1 flex flex-col justify-center ml-3">
+              <p className={`${textColor} text-sm font-medium opacity-90 mb-1`}>{title}</p>
+              <p className={`${textColor} text-2xl font-bold`}>
+                {loading ? (
+                  <motion.div
+                    className="w-4 h-4 border border-white/30 border-t-white rounded-full animate-spin"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                  />
+                ) : (
+                  value
+                )}
+              </p>
+              {subtitle && <p className={`${textColor} text-xs opacity-75`}>{subtitle}</p>}
+            </div>
+
+            <div className={`${textColor} opacity-60 self-center`}>
+              <Eye className="text-sm" />
+            </div>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+};
 
 const ManageDepartment: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -108,7 +176,7 @@ const ManageDepartment: React.FC = () => {
     direction: "ascending" | "descending";
   } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(7);
+  const [itemsPerPage, setItemsPerPage] = useState(7);
   const [companies, setCompanies] = useState<ICompany[]>([]);
   const [isViewUsersModalOpen, setIsViewUsersModalOpen] = useState(false);
 
@@ -120,9 +188,8 @@ const ManageDepartment: React.FC = () => {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem("token"); // Get token from local storage
+    const token = localStorage.getItem("token");
     if (!token) {
-      // Redirect to login or handle unauthorized access
       return;
     }
 
@@ -132,13 +199,13 @@ const ManageDepartment: React.FC = () => {
     if (!organizationId) {
       return;
     }
-    // Fetch companies
+
     axios
       .get<APIResponse<{ companies: ICompany[] }>>(
         `${import.meta.env.VITE_BASE_URL}/v1/${organizationId}/companies`,
         {
           headers: {
-            Authorization: `Bearer ${token}`, // Include token in headers
+            Authorization: `Bearer ${token}`,
           },
         }
       )
@@ -154,7 +221,6 @@ const ManageDepartment: React.FC = () => {
       });
   }, [dispatch]);
 
-  // Calculate department statistics when departments change
   useEffect(() => {
     if (Array.isArray(departments)) {
       const withCompany = departments.filter(
@@ -162,7 +228,6 @@ const ManageDepartment: React.FC = () => {
       ).length;
       const withoutCompany = departments.length - withCompany;
 
-      // Count departments by company
       const byCompany: Record<string, number> = {};
       departments.forEach((dept) => {
         if (dept.company) {
@@ -180,7 +245,6 @@ const ManageDepartment: React.FC = () => {
     }
   }, [departments]);
 
-  // Clear success message after 3 seconds
   useEffect(() => {
     if (success) {
       const timer = setTimeout(() => {
@@ -190,7 +254,6 @@ const ManageDepartment: React.FC = () => {
     }
   }, [success, dispatch]);
 
-  // Handle search
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
@@ -198,19 +261,16 @@ const ManageDepartment: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Handle edit department
   const handleEditClick = (department: Department) => {
     dispatch(setSelectedDepartment(department));
     setIsEditModalOpen(true);
   };
 
-  // Handle delete confirmation
   const handleDeleteClick = (id: number) => {
     setDepartmentToDelete(id);
     setIsDeleteModalOpen(true);
   };
 
-  // Confirm delete
   const confirmDelete = async () => {
     if (departmentToDelete) {
       try {
@@ -223,7 +283,6 @@ const ManageDepartment: React.FC = () => {
     }
   };
 
-  // Handle sorting
   const requestSort = (key: string) => {
     let direction: "ascending" | "descending" = "ascending";
     if (
@@ -236,9 +295,7 @@ const ManageDepartment: React.FC = () => {
     setSortConfig({ key, direction });
   };
 
-  // Apply sorting
   const getSortedDepartments = () => {
-    // Ensure filteredDepartments is an array before spreading
     const sortableDepartments = Array.isArray(filteredDepartments)
       ? [...filteredDepartments]
       : [];
@@ -271,10 +328,7 @@ const ManageDepartment: React.FC = () => {
     return sortableDepartments;
   };
 
-  // Get sorted departments
   const sortedDepartments = getSortedDepartments();
-
-  // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentDepartments = sortedDepartments.slice(
@@ -283,296 +337,339 @@ const ManageDepartment: React.FC = () => {
   );
   const totalPages = Math.ceil(sortedDepartments.length / itemsPerPage);
 
-  return (
-    <div className="px-4 py-8">
-      <div className="flex flex-row justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Department Management
-          </h1>
-          <p className="text-gray-500 mb-6">
-            Manage departments, assign to companies
-          </p>
+  const PaginationControls = () => {
+    const getPageNumbers = () => {
+      const pages = [];
+      const maxVisible = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+      let end = Math.min(totalPages, start + maxVisible - 1);
+
+      if (end - start + 1 < maxVisible) {
+        start = Math.max(1, end - maxVisible + 1);
+      }
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      return pages;
+    };
+
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-t border-gray-200">
+        <div className="flex items-center text-sm text-gray-700 font-medium">
+          <span className="text-gray-600">
+            Showing <span className="font-semibold text-gray-900">{indexOfFirstItem + 1}</span> to{" "}
+            <span className="font-semibold text-gray-900">{Math.min(indexOfLastItem, sortedDepartments.length)}</span> of{" "}
+            <span className="font-semibold text-gray-900">{sortedDepartments.length}</span> departments
+          </span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="ml-4 border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm transition-all"
+          >
+            <option value={5}>5 per page</option>
+            <option value={10}>10 per page</option>
+            <option value={20}>20 per page</option>
+            <option value={50}>50 per page</option>
+          </select>
+        </div>
+
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="First page"
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="Previous page"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          {getPageNumbers().map((page) => (
+            <button
+              key={page}
+              onClick={() => setCurrentPage(page)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-sm ${
+                page === currentPage
+                  ? "bg-emerald-500 text-white border border-emerald-500 shadow-emerald-200"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="Next page"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="p-2.5 rounded-lg border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+            title="Last page"
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </button>
         </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="px-4 py-8">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="mb-6"
+      >
+        <h1 className="text-2xl font-semibold text-gray-800 mb-2">Department Management</h1>
+        <p className="text-sm text-gray-600">Manage departments, assign to companies</p>
+      </motion.div>
 
       {/* Department Statistics Report Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-        <Card className="h-28 flex flex-row">
-          <CardContent className="flex flex-row justify-around w-full items-center">
-            <ListChecks className="h-6 w-6 text-primary  mb-2" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <DepartmentStatsCard
+          title="Total Departments"
+          value={departmentStats.total}
+          subtitle="All departments"
+          icon={<ListChecks className="h-5 w-5" />}
+          bgGradient="bg-gradient-to-br from-blue-500 to-blue-600"
+          textColor="text-white"
+          loading={loading}
+        />
 
-            <p className="text-sm font-medium text-gray-600 mr-2">
-              Total Departments
-            </p>
-            <h3 className="text-2xl font-bold text-gray-900">
-              {departmentStats.total}
-            </h3>
-          </CardContent>
-        </Card>
+        <DepartmentStatsCard
+          title="With Company"
+          value={departmentStats.withCompany}
+          subtitle="Assigned to companies"
+          icon={<Building className="h-5 w-5" />}
+          bgGradient="bg-gradient-to-br from-green-500 to-green-600"
+          textColor="text-white"
+          loading={loading}
+        />
 
-        <Card className="h-28 flex flex-row">
-          <CardContent className="flex flex-row justify-around w-full items-center">
-            <Building className="h-6 w-6 text-green  mb-2" />
-            <p className="text-sm font-medium text-gray-600">
-              Departments with Company
-            </p>
-            <h3 className="text-2xl font-bold text-gray-900">
-              {departmentStats.withCompany}
-            </h3>
-          </CardContent>
-        </Card>
-
-        <Card className="h-28 flex flex-row">
-          <CardContent className="flex flex-row justify-around w-full items-center">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Top Companies</p>
-
-              <Building className="h-6 w-6 text-primary mx-auto mb-2" />
-            </div>
-
-            <div>
-              {Object.keys(departmentStats.byCompany).length > 0 ? (
-                Object.entries(departmentStats.byCompany)
-                  .slice(0, 2)
-                  .map(([company, count]) => (
-                    <div
-                      key={company}
-                      className="flex justify-between items-center text-sm"
-                    >
-                      <span className="truncate max-w-[100px]" title={company}>
-                        {company}
-                      </span>
-                      <span className="font-semibold">{count}</span>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-xs text-gray-500">No company data</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <DepartmentStatsCard
+          title="Top Companies"
+          value={Object.keys(departmentStats.byCompany).length > 0 ? "" : "No data"}
+          subtitle={Object.keys(departmentStats.byCompany).length > 0 ? 
+            Object.entries(departmentStats.byCompany)
+              .slice(0, 2)
+              .map(([company]) => company)
+              .join(", ") : 
+            "No company data"}
+          icon={<Building className="h-5 w-5" />}
+          bgGradient="bg-gradient-to-br from-purple-500 to-purple-600"
+          textColor="text-white"
+          loading={loading}
+        />
       </div>
 
       {/* Main content area */}
-      <Card className="w-full">
-        <CardHeader className="pb-3">
-          {error && (
-            <div className="mb-4 p-3 border border-red text-red rounded-md flex gap-2">
-              <AlertCircle className="h-5 w-5 text-red" />
-              <div className="text-sm">{error}</div>
-              <button
-                onClick={() => dispatch(clearDepartmentError())}
-                className="ml-auto text-red hover:text-red"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          )}
-          {success && (
-            <div className="mb-4 p-3 border border-green text-green rounded-md flex gap-2">
-              <CheckCircle className="h-5 w-5 text-green" />
-              <div className="text-sm">{successMessage}</div>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent>
-          {/* Search and filter controls */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <div className="relative w-full sm:w-64">
-              <Search
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                size={18}
-              />
-              <Input
-                placeholder="Search departments..."
-                className="pl-10"
-                value={searchTerm}
-                onChange={handleSearchChange}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => dispatch(fetchAllDepartments())}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-                />
-                Refresh
-              </Button>
-            </div>
-          </div>
-
-          {/* Department table or loading state */}
-          {loading && !isEditing ? (
-            <Loader2 /> // Use Loader component
-          ) : !Array.isArray(filteredDepartments) ||
-            filteredDepartments.length === 0 ? (
-            <div className="text-center py-12 border rounded-md">
-              <p className="text-gray-500">No departments found</p>
-            </div>
-          ) : (
-            <div className="w-full overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead
-                      className="cursor-pointer"
-                      onClick={() => requestSort("name")}
-                    >
-                      <div className="flex items-center">
-                        Department Name
-                        {sortConfig?.key === "name" &&
-                          (sortConfig.direction === "ascending" ? (
-                            <ChevronUp className="ml-1 h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="ml-1 h-4 w-4" />
-                          ))}
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="cursor-pointer"
-                      onClick={() => requestSort("company")}
-                    >
-                      <div className="flex items-center">
-                        Company
-                        {sortConfig?.key === "company" &&
-                          (sortConfig.direction === "ascending" ? (
-                            <ChevronUp className="ml-1 h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="ml-1 h-4 w-4" />
-                          ))}
-                      </div>
-                    </TableHead>
-                    {loggedInUser?.role !== "overall" && (
-                      <TableHead className="text-right">Actions</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentDepartments.map((department, index) => (
-                    <TableRow
-                      key={department.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      <TableCell className="font-medium">
-                        {(currentPage - 1) * itemsPerPage + index + 1}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{department.name}</div>
-                      </TableCell>
-                      <TableCell>
-                        {department.company ? (
-                          <div className="flex items-center">
-                            <Building className="mr-2 h-4 w-4 text-gray-500" />
-                            <span>{department.company.name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">Not assigned</span>
-                        )}
-                      </TableCell>
-                      {loggedInUser?.role !== "overall" && (
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditClick(department)}
-                              className="h-8 w-8 p-0 hover:bg-white"
-                              title="Edit Department"
-                            >
-                              <Edit className="h-3 w-3" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteClick(department.id)}
-                              className="h-8 w-8 p-0 text-red hover:bg-white"
-                              title="Delete Department"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {Array.isArray(filteredDepartments) &&
-            filteredDepartments.length > itemsPerPage && (
-              <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
-                <div className="text-sm text-gray-500 order-2 sm:order-1">
-                  Showing {indexOfFirstItem + 1} to{" "}
-                  {Math.min(indexOfLastItem, filteredDepartments.length)} of{" "}
-                  {filteredDepartments.length} departments
-                </div>
-                <div className="flex gap-2 order-1 sm:order-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className="hover:bg-blue"
-                  >
-                    Previous
-                  </Button>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    // Show first page, last page, and pages around current page
-                    let pageToShow = i + 1;
-                    if (totalPages > 5) {
-                      if (currentPage <= 3) {
-                        pageToShow = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageToShow = totalPages - 4 + i;
-                      } else {
-                        pageToShow = currentPage - 2 + i;
-                      }
-                    }
-
-                    return (
-                      <Button
-                        key={pageToShow}
-                        variant={
-                          currentPage === pageToShow ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setCurrentPage(pageToShow)}
-                        className={
-                          currentPage === pageToShow
-                            ? "bg-green text-white"
-                            : "hover:bg-blue"
-                        }
-                      >
-                        {pageToShow}
-                      </Button>
-                    );
-                  })}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setCurrentPage(Math.min(totalPages, currentPage + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="hover:bg-blue"
-                  >
-                    Next
-                  </Button>
-                </div>
+      <Card className="w-full shadow-lg">
+        <Card className="border-0">
+          <div className="p-4">
+            {error && (
+              <div className="mb-4 p-3 border border-red-400 text-red-600 rounded-md flex gap-2 bg-red-50">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <div className="text-sm">{error}</div>
+                <button
+                  onClick={() => dispatch(clearDepartmentError())}
+                  className="ml-auto text-red-500 hover:text-red-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
             )}
-        </CardContent>
+            {success && (
+              <div className="mb-4 p-3 border border-green-400 text-green-600 rounded-md flex gap-2 bg-green-50">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <div className="text-sm">{successMessage}</div>
+              </div>
+            )}
+
+            {/* Search and filter controls */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+              <div className="relative w-full sm:w-64">
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
+                <Input
+                  placeholder="Search departments..."
+                  className="pl-10"
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => dispatch(fetchAllDepartments())}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            {/* Department table or loading state */}
+            {loading && !isEditing ? (
+              <Loader2 />
+            ) : !Array.isArray(filteredDepartments) ||
+              filteredDepartments.length === 0 ? (
+              <div className="text-center py-12 border rounded-md">
+                <p className="text-gray-500">No departments found</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-600">
+<thead className="text-xs text-gray-700 uppercase bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+  <tr>
+    <th scope="col" className="px-6 py-4 font-semibold">
+      <div className="flex items-center gap-2">
+        <span>#</span>
+      </div>
+    </th>
+
+    <th
+      scope="col"
+      className="px-6 py-4 font-semibold cursor-pointer"
+      onClick={() => requestSort("name")}
+    >
+      <div className="flex items-center gap-2">
+        {/* Department Icon - Blue for information */}
+        <FileText className="h-4 w-4 text-blue-500" />
+        <span>Department Name</span>
+        {sortConfig?.key === "name" &&
+          (sortConfig.direction === "ascending" ? (
+            <ChevronUp className="h-4 w-4 text-gray-600" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-gray-600" />
+          ))}
+      </div>
+    </th>
+
+    <th
+      scope="col"
+      className="px-6 py-4 font-semibold cursor-pointer"
+      onClick={() => requestSort("company")}
+    >
+      <div className="flex items-center gap-2">
+        {/* Company Icon - Indigo for organization */}
+        <Building className="h-4 w-4 text-indigo-500" />
+        <span>Company</span>
+        {sortConfig?.key === "company" &&
+          (sortConfig.direction === "ascending" ? (
+            <ChevronUp className="h-4 w-4 text-gray-600" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-gray-600" />
+          ))}
+      </div>
+    </th>
+
+    {loggedInUser?.role !== "overall" && (
+      <th scope="col" className="px-6 py-4 font-semibold text-right">
+        Actions
+      </th>
+    )}
+  </tr>
+</thead>
+
+                    <tbody className="divide-y divide-gray-100">
+                      {currentDepartments.map((department, index) => (
+                        <motion.tr
+                          key={department.id}
+                          className="bg-white hover:bg-gray-50 transition-all duration-200"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: index * 0.05 }}
+                        >
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full text-sm font-semibold text-gray-600">
+                              {(currentPage - 1) * itemsPerPage + index + 1}
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-gray-900">
+                              {department.name}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {department.company ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <span className="text-sm text-gray-700">
+                                  {department.company.name}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">—</span>
+                            )}
+                          </td>
+                          {loggedInUser?.role !== "overall" && (
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-1">
+                                <div className="flex items-center rounded-md gap-1">
+                                  <button
+                                    onClick={() => handleEditClick(department)}
+                                    className="flex items-center px-2 py-1.5 text-[11px] font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition duration-150 shadow"
+                                    title="Edit Department"
+                                  >
+                                    <Edit className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline ml-1">Edit</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleDeleteClick(department.id)}
+                                    className="flex items-center px-2 py-1.5 text-[11px] font-medium rounded bg-red-600 text-white hover:bg-red-700 transition duration-150 shadow"
+                                    title="Delete Department"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline ml-1">Delete</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          )}
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                {Array.isArray(filteredDepartments) &&
+                  filteredDepartments.length > itemsPerPage && <PaginationControls />}
+              </div>
+            )}
+          </div>
+        </Card>
       </Card>
 
       {/* Edit Department Modal */}
@@ -605,7 +702,7 @@ const ManageDepartment: React.FC = () => {
                       ).unwrap();
                       setIsEditModalOpen(false);
                       dispatch(clearSelectedDepartment());
-                      dispatch(fetchAllDepartments()); // Refresh table after edit
+                      dispatch(fetchAllDepartments());
                     } catch (err) {
                       // Error is handled in the slice
                     }
@@ -619,7 +716,7 @@ const ManageDepartment: React.FC = () => {
                           htmlFor="name"
                           className="block text-sm font-medium text-gray-700 mb-1"
                         >
-                          Department Name <span className="text-red">*</span>
+                          Department Name <span className="text-red-500">*</span>
                         </label>
                         <Field
                           name="name"
@@ -629,7 +726,7 @@ const ManageDepartment: React.FC = () => {
                         <ErrorMessage
                           name="name"
                           component="div"
-                          className="mt-1 text-sm text-red"
+                          className="mt-1 text-sm text-red-500"
                         />
                       </div>
 
@@ -659,7 +756,7 @@ const ManageDepartment: React.FC = () => {
                         <Button
                           type="submit"
                           disabled={isSubmitting}
-                          className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green text-base font-medium text-white hover:bg-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isSubmitting ? (
                             <>
@@ -677,7 +774,7 @@ const ManageDepartment: React.FC = () => {
                             setIsEditModalOpen(false);
                             dispatch(clearSelectedDepartment());
                           }}
-                          className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green  sm:mt-0 sm:w-auto sm:text-sm"
+                          className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:w-auto sm:text-sm"
                         >
                           Cancel
                         </Button>
@@ -734,7 +831,7 @@ const ManageDepartment: React.FC = () => {
             <div className="mt-4 flex justify-end">
               <Button
                 onClick={() => setIsViewUsersModalOpen(false)}
-                className="bg-green hover:bg-blue text-white"
+                className="bg-green-600 hover:bg-green-700 text-white"
               >
                 Close
               </Button>
@@ -759,7 +856,7 @@ const ManageDepartment: React.FC = () => {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red hover:bg-red-600 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               {loading ? (
                 <>

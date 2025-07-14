@@ -59,7 +59,7 @@ const initialState: SupervisorState = {
 export const fetchAllUsers = createAsyncThunk("supervisor/fetchAllUsers", async (_, { rejectWithValue }) => {
   try {
     const token = localStorage.getItem("token") // Get token from local storage
-    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/users`, {
+    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/users?getAll=true`, {
       headers: {
         Authorization: `Bearer ${token}`, // Include token in headers
       },

@@ -192,7 +192,7 @@ export const fetchAllUsers = createAsyncThunk("teamManagement/fetchAllUsers", as
     const state = getState() as RootState;
     const organizationId = state.login.user?.organization?.id;
     const token = localStorage.getItem("token") 
-    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users`, {
+    const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/user/${organizationId}/users?getAll=true`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
